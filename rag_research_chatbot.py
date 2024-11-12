@@ -17,7 +17,7 @@ from tools import *
 from web_research_prompts import RAG_SYSTEM_PROMPT
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 # from langchain_openai import ChatOpenAI
-from langchain.agents import AgentExecutor, create_react_agent #create_openai_tools_agent
+from langchain.agents import AgentExecutor, create_openai_tools_agent #create_react_agent #create_openai_tools_agent
 import functools
 import streamlit as st
 
@@ -102,7 +102,7 @@ class RAGResearchChatbot:
             MessagesPlaceholder(variable_name="messages"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ])
-        agent = create_react_agent(llm, tools, prompt)
+        agent = create_openai_tools_agent(llm, tools, prompt)
         executor = AgentExecutor(agent=agent, tools=tools)
         return executor
 
