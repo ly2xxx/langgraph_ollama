@@ -6,7 +6,13 @@ import mm_agent
 
 # set_environment_variables("Article_Writer_Graph")
 
-def process_form(form_number,article):
+def process_form(form_number, article):
+    # Add default values for required keys at the start of the function
+    if form_number == 1:
+        article.setdefault("title", "New Article")
+        article.setdefault("body", "")
+        article.setdefault("critique", "")
+
     def set_value():
         print("set value",st.session_state.url)
         st.session_state["newvalues"]["url"]=st.session_state.url

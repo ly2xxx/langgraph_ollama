@@ -1,5 +1,6 @@
 from datetime import datetime
-import json5 as json
+# import json5 as json
+import json
 
 from langgraph.graph import Graph
 
@@ -70,13 +71,13 @@ class WriterAgent:
             response = ChatOllama(model=MODEL, base_url=BASE_URL, temperature=0.5).invoke(lc_messages).content
             parsed_response = json.loads(response)
             return parsed_response
-        except json.JSONDecodeError:
+        except ValueError:  # json5 raises ValueError instead of JSONDecodeError
             # Return a structured response if JSON parsing fails
             return {
-                "title": "Error Processing Article",
+                # "title": "Error Processing Article",
                 "date": datetime.now().strftime('%d/%m/%Y'),
                 "body": response,
-                "summary": "Error occurred while processing the article"
+                # "summary": "Error occurred while processing the article"
             }
         #print (response)
         # return json.loads(response)
@@ -203,10 +204,15 @@ class InputAgent:
         return article
             
 class OutputAgent:
-    def run(self,article:dict):
-        print(f"Title: {article['title']}\nSummary: {article['summary']}\nBody:{article['body']}")
-        return article
-      
+    def run(self, article: dict):
+        # Get values with defaults if keys don't exist
+        title = article.get('title', 'Untitled Article')
+        summary = article.get('summary', 'No summary available')
+        body = article.get('body', 'No content available')
+        
+        print(f"Title: {title}\nSummary: {summary}\nBody:{body}")
+        return article  
+        
 class HumanReviewAgent:
     def run(self,article:dict):
         print("human review agent running",article.keys())
