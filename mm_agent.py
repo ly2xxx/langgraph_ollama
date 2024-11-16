@@ -126,7 +126,7 @@ class WriterAgent:
         # response = ChatOpenAI(model=MODEL, max_retries=1, temperature=.5,model_kwargs=optional_params).invoke(lc_messages).content
         response = ChatOllama(model=MODEL, base_url=BASE_URL, temperature=0.5).invoke(lc_messages).content
         response = json.loads(response)
-        print(f"For article: {article['title']}")
+        # print(f"For article: {article['title']}")
         print(f"Writer Revision Message: {response['message']}\n")
         return response
 
@@ -172,7 +172,7 @@ class CritiqueAgent:
         if response == 'None':
             return {'critique': None}
         else:
-            print(f"For article: {article['title']}")
+            # print(f"For article: {article['title']}")
             print(f"Feedback: {response}\n")
             return {'critique': response, 'message': None}
 

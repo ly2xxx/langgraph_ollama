@@ -198,11 +198,11 @@ def main():
                     st.session_state["newvalues"]=None
                     st.rerun()
         if "quit" in st.session_state["result"]:
-            st.subheader(st.session_state.result["title"])
+            # st.subheader(st.session_state.result["title"])
             st.write(st.session_state.result["date"])
             st.markdown(st.session_state.result["body"])
             st.write("\n")
-            st.write("summary:",st.session_state.result["summary"])
+            # st.write("summary:",st.session_state.result["summary"])
             st.button("Run with new document",key="rerun",on_click=rerun)
             
             with st.sidebar:
