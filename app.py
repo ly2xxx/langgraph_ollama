@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage
 # from web_research_rag import create_web_research_rag_graph
 # from web_research_consolidated import WebResearchGraph
 from rag_research_chatbot import RAGResearchChatbot
-# from mm_agent import ArticleWriterStateMachine
+from mm_agent import ArticleWriterStateMachine
 from io import BytesIO
 from PIL import Image
 import asyncio
@@ -20,7 +20,7 @@ import os
 # RESEARCH_AGENT = "Research Assistant"
 # RAG_RESEARCH_AGENT = "RAG Research Assistant"
 RAG_CHATBOT_AGENT = "RAG Chatbot Agent"
-# ARTICLE_WRITER = "Article Writer"
+ARTICLE_WRITER = "Article Writer"
 
 load_dotenv()
 
@@ -41,10 +41,10 @@ CHAIN_CONFIG = {
         "models": [os.getenv('OLLAMA_MODEL')],
         "support_types": ["pdf", "txt", "md", "xlsx", "png", "jpg"]
     },
-    # ARTICLE_WRITER: {
-    #     "models": ["gpt-4o-mini"],
-    #     "support_types": ["txt", "md"]
-    # }
+    ARTICLE_WRITER: {
+        "models": [os.getenv('OLLAMA_MODEL')],
+        "support_types": ["txt", "md"]
+    }
 }
 
 def process_uploaded_files(uploaded_files, support_types):
@@ -81,7 +81,7 @@ def get_llm(model_selection):
 def main():
     st.title("Multi-agent Assistant Demo")
 
-    chain_selection = st.selectbox("Select assistant", [RAG_CHATBOT_AGENT])#[TRAVEL_AGENT, RESEARCH_AGENT, RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT, ARTICLE_WRITER])
+    chain_selection = st.selectbox("Select assistant", [RAG_CHATBOT_AGENT, ARTICLE_WRITER])#[TRAVEL_AGENT, RESEARCH_AGENT, RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT, ARTICLE_WRITER])
     
     # Clear chat history when switching away from RAG Chatbot Agent
     if "previous_agent" not in st.session_state:
@@ -97,7 +97,7 @@ def main():
     llm = get_llm(model_selection)
     # web_research = WebResearchGraph(llm)
     rag_chatbot = RAGResearchChatbot(llm)
-    # article_writer = ArticleWriterStateMachine()
+    article_writer = ArticleWriterStateMachine()
 
     langgraph_chain = None
     # if chain_selection == TRAVEL_AGENT:
@@ -106,12 +106,12 @@ def main():
     #     langgraph_chain = web_research.create_web_research_graph()
     # elif chain_selection == RAG_RESEARCH_AGENT:
     #     langgraph_chain = web_research.create_web_research_rag_graph()
-    # elif chain_selection == RAG_CHATBOT_AGENT:
-    langgraph_chain = rag_chatbot.create_rag_research_chatbot_graph()
-    # elif chain_selection == ARTICLE_WRITER:
-    #     langgraph_chain = article_writer.getGraph()
-    # else:
-    #     langgraph_chain = None
+    if chain_selection == RAG_CHATBOT_AGENT:
+        langgraph_chain = rag_chatbot.create_rag_research_chatbot_graph()
+    elif chain_selection == ARTICLE_WRITER:
+        langgraph_chain = article_writer.getGraph()
+    else:
+        langgraph_chain = None
     
     displayGraph(langgraph_chain, chain_selection)
 
@@ -124,10 +124,10 @@ def main():
     if chain_selection in [RAG_CHATBOT_AGENT]:#[RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT]:
         with dynamic_content_container.container():
             uploaded_files = render_file_picker(CHAIN_CONFIG[chain_selection]["support_types"])
-    # elif chain_selection in [ARTICLE_WRITER]:
-    #     with dynamic_content_container.container():
-    #         import mm_st
-    #         mm_st.main()
+    elif chain_selection in [ARTICLE_WRITER]:
+        with dynamic_content_container.container():
+            import mm_st
+            mm_st.main()
     else:
         dynamic_content_container.empty()
 

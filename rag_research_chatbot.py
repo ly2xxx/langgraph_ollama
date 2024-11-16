@@ -29,6 +29,8 @@ load_dotenv()
 # from setup_environment import set_environment_variables
 
 class State(MessagesState):
+    query: str
+    file_path: str
     summary: str
 
 class RAGResearchChatbot:
@@ -42,6 +44,25 @@ class RAGResearchChatbot:
         self.RAG_AGENT_NAME = "rag"
         self.CONVERSATION_NODE_NAME = "conversation"
         self.SUMMARIZE_NODE_NAME = "summarize_conversation"
+    
+    # def local_rag(self, state: State):
+    #     llm_with_tools = self.LLM.with_tools([rag_query])
+    #     chain = RAG_SYSTEM_PROMPT | llm_with_tools
+    #     response = chain.invoke({"query": state["query"], "file_path": state["file_path"]})
+    #     return {"summary": response}
+
+    def local_rag(self, state: State):
+        rag_agent = self.create_agent(self.LLM, [rag_query], RAG_SYSTEM_PROMPT)
+        response = rag_agent.invoke({
+            "messages": [
+                HumanMessage(content=f"Query: {state['query']}\nFile Path: {state['file_path']}")
+            ],
+            "query": state["query"],
+            "file_path": state["file_path"],
+            "tools": [rag_query]
+        })
+        return {"summary": response["output"]}
+
 
     def call_model(self, state: State):
         summary = state.get("summary", "")
@@ -107,11 +128,11 @@ class RAGResearchChatbot:
         return executor
 
     def create_rag_research_chatbot_graph(self):
-        rag_agent = self.create_agent(self.LLM, [rag_query], RAG_SYSTEM_PROMPT)
-        rag_agent_node = functools.partial(self.agent_node, agent=rag_agent, name=self.RAG_AGENT_NAME)
+        # rag_agent = self.create_agent(self.LLM, [rag_query], RAG_SYSTEM_PROMPT)
+        # rag_agent_node = functools.partial(self.agent_node, agent=rag_agent, name=self.RAG_AGENT_NAME)
 
         workflow = StateGraph(State)
-        workflow.add_node(self.RAG_AGENT_NAME, rag_agent_node)
+        workflow.add_node(self.RAG_AGENT_NAME, self.local_rag) #rag_agent_node)
         workflow.add_node(self.CONVERSATION_NODE_NAME, self.call_model)
         workflow.add_node(self.SUMMARIZE_NODE_NAME, self.summarize_conversation)
 
