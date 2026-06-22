@@ -22,7 +22,7 @@ uv run streamlit run app.py
 Requires a running [Ollama](https://ollama.com/) server. Configure it via `.env`:
 
 ```
-OLLAMA_MODEL=llama3.2
+OLLAMA_MODEL=glm-5:cloud
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 

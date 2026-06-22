@@ -30,11 +30,11 @@ CHAIN_CONFIG = {
     #     "support_types": ["txt", "md"]
     # },
     # RESEARCH_AGENT: {
-    #     "models": ["gpt-4o-mini", "llama3.2"],
+    #     "models": ["gpt-4o-mini", "glm-5:cloud"],
     #     "support_types": ["pdf", "txt", "md"]
     # },
     # RAG_RESEARCH_AGENT: {
-    #     "models": ["gpt-4o-mini", "llama3.2"],
+    #     "models": ["gpt-4o-mini", "glm-5:cloud"],
     #     "support_types": ["pdf", "txt", "md", "xlsx"]
     # },
     RAG_CHATBOT_AGENT: {
