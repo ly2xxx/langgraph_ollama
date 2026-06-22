@@ -30,6 +30,7 @@ Configure your main text model and base URL via `.env`:
 ```
 OLLAMA_MODEL=glm-5:cloud
 OLLAMA_BASE_URL=http://localhost:11434
+TAVILY_API_KEY=your_tavily_api_key_here
 ```
 
 A generated `requirements.txt` is also exported from the lock for tooling that

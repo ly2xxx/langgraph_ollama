@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage
 # from web_research_consolidated import WebResearchGraph
 from rag_research_chatbot import RAGResearchChatbot
 from mm_agent import ArticleWriterStateMachine
+from web_researcher import WebResearcher
 from io import BytesIO
 from PIL import Image
 import asyncio
@@ -21,6 +22,7 @@ import os
 # RAG_RESEARCH_AGENT = "RAG Research Assistant"
 RAG_CHATBOT_AGENT = "RAG Chatbot Agent"
 ARTICLE_WRITER = "Article Writer"
+INTERNET_RESEARCHER = "Internet Researcher"
 
 load_dotenv()
 
@@ -44,6 +46,10 @@ CHAIN_CONFIG = {
     ARTICLE_WRITER: {
         "models": [os.getenv('OLLAMA_MODEL')],
         "support_types": ["txt", "md"]
+    },
+    INTERNET_RESEARCHER: {
+        "models": [os.getenv('OLLAMA_MODEL')],
+        "support_types": []
     }
 }
 
@@ -81,7 +87,7 @@ def get_llm(model_selection):
 def main():
     st.title("Multi-agent Assistant Demo")
 
-    chain_selection = st.selectbox("Select assistant", [RAG_CHATBOT_AGENT, ARTICLE_WRITER])#[TRAVEL_AGENT, RESEARCH_AGENT, RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT, ARTICLE_WRITER])
+    chain_selection = st.selectbox("Select assistant", [RAG_CHATBOT_AGENT, ARTICLE_WRITER, INTERNET_RESEARCHER])#[TRAVEL_AGENT, RESEARCH_AGENT, RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT, ARTICLE_WRITER])
     
     # Clear chat history when switching away from RAG Chatbot Agent
     if "previous_agent" not in st.session_state:
@@ -98,6 +104,7 @@ def main():
     # web_research = WebResearchGraph(llm)
     rag_chatbot = RAGResearchChatbot(llm)
     article_writer = ArticleWriterStateMachine()
+    web_researcher_agent = WebResearcher(llm)
 
     langgraph_chain = None
     # if chain_selection == TRAVEL_AGENT:
@@ -110,6 +117,8 @@ def main():
         langgraph_chain = rag_chatbot.create_rag_research_chatbot_graph()
     elif chain_selection == ARTICLE_WRITER:
         langgraph_chain = article_writer.getGraph()
+    elif chain_selection == INTERNET_RESEARCHER:
+        langgraph_chain = web_researcher_agent.create_graph()
     else:
         langgraph_chain = None
     
@@ -155,6 +164,11 @@ def main():
                 "file_path": ','.join(temp_file_paths)
             }
             run_chatbot_graph(langgraph_chain, input_data, config)
+        elif chain_selection == INTERNET_RESEARCHER:
+            for s in langgraph_chain.stream({"messages": [HumanMessage(content=user_input)]}, {"recursion_limit": 100}):
+                if "__end__" not in s:
+                    st.write(s)
+                    st.write("---")
         else:
             st.write("Feature under construction")
 
