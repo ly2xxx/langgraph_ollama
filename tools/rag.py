@@ -75,7 +75,7 @@ def rag_query(query: str, file_path: str) -> str:
             logging.info(warning_response)
             return warning_response
             
-        embeddings = OllamaEmbeddings(model=model_selection, base_url="http://localhost:11434")
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url="http://localhost:11434")
         db = FAISS.from_documents(texts, embeddings)
 
         docs = db.similarity_search(query)

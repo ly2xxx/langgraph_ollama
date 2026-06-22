@@ -31,4 +31,5 @@ dependencies = [
     # Misc
     "python-dotenv",
     "pydantic>=2",
+    "pypdf>=6.14.0",
 ]

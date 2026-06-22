@@ -19,7 +19,13 @@ uv sync
 uv run streamlit run app.py
 ```
 
-Requires a running [Ollama](https://ollama.com/) server. Configure it via `.env`:
+Requires a running [Ollama](https://ollama.com/) server. You also need to pull the dedicated embedding model before using RAG features:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+Configure your main text model and base URL via `.env`:
 
 ```
 OLLAMA_MODEL=glm-5:cloud
@@ -28,3 +34,5 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 A generated `requirements.txt` is also exported from the lock for tooling that
 needs it (`uv export --no-hashes -o requirements.txt`).
+
+![demo](demo/image.png)

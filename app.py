@@ -149,7 +149,11 @@ def main():
         if chain_selection == RAG_CHATBOT_AGENT:
             config = {"configurable": {"thread_id": "1"}}  # Add a thread_id
             temp_file_paths = process_uploaded_files(uploaded_files, CHAIN_CONFIG[chain_selection]["support_types"])
-            input_data = {"messages": [HumanMessage(content=f"Query: {user_input}\nFile Path: {','.join(temp_file_paths)}")]}
+            input_data = {
+                "messages": [HumanMessage(content=f"Query: {user_input}\nFile Path: {','.join(temp_file_paths)}")],
+                "query": user_input,
+                "file_path": ','.join(temp_file_paths)
+            }
             run_chatbot_graph(langgraph_chain, input_data, config)
         else:
             st.write("Feature under construction")
