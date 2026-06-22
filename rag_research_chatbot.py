@@ -5,7 +5,7 @@
 from langchain_core.messages import HumanMessage, SystemMessage, RemoveMessage
 from langgraph.graph import MessagesState
 # from langchain_openai import ChatOpenAI
-from langchain_community.chat_models import ChatOllama
+from langchain_ollama import ChatOllama
 from langgraph.graph import END, StateGraph, START
 # from langgraph.checkpoint.memory import MemorySaver
 import sqlite3

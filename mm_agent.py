@@ -7,7 +7,7 @@ from langgraph.graph import Graph
 # from langchain.adapters.openai import convert_openai_messages
 from langchain_community.adapters.openai import convert_openai_messages
 # from langchain_openai import ChatOpenAI
-from langchain_community.chat_models import ChatOllama
+from langchain_ollama import ChatOllama
 import os
 
 MODEL=os.getenv('OLLAMA_MODEL')

@@ -3,16 +3,16 @@ from pydantic import BaseModel, Field
 # from langchain.embeddings import OpenAIEmbeddings
 # from langchain.embeddings.openai import OpenAIEmbeddings
 # from langchain_openai import OpenAIEmbeddings
-from langchain_community.embeddings import OllamaEmbeddings
+from langchain_ollama import OllamaEmbeddings
 # from langchain.vectorstores import Chroma
 from langchain_community.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
+from langchain_text_splitters import CharacterTextSplitter
 # from langchain.document_loaders import PyPDFLoader, TextLoader
 from langchain_community.document_loaders import PyPDFLoader,TextLoader
 import logging
 import pandas as pd
 from openpyxl import load_workbook
-from langchain.schema import Document
+from langchain_core.documents import Document
 import base64
 import streamlit as st
 import logging
@@ -75,7 +75,7 @@ def rag_query(query: str, file_path: str) -> str:
             logging.info(warning_response)
             return warning_response
             
-        embeddings = OllamaEmbeddings(model_selection, base_url="http://localhost:11434")
+        embeddings = OllamaEmbeddings(model=model_selection, base_url="http://localhost:11434")
         db = FAISS.from_documents(texts, embeddings)
 
         docs = db.similarity_search(query)

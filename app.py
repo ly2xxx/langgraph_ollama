@@ -75,7 +75,7 @@ def get_llm(model_selection):
     #     from langchain_openai import ChatOpenAI
     #     return ChatOpenAI(model=model_selection, temperature=0)
     # else:
-        from langchain_community.chat_models import ChatOllama
+        from langchain_ollama import ChatOllama
         return ChatOllama(model=model_selection, base_url=os.getenv('OLLAMA_BASE_URL'), temperature=0)
 
 def main():
