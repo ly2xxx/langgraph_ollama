@@ -1,0 +1,24 @@
+# Grafana Tempo — single-binary, local trace store. Not for production scale,
+# but perfect for a demo: it accepts OTLP and Grafana queries it directly.
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
+
+# Allow querying traces from the moment they arrive.
+ingester:
+  max_block_duration: 5m

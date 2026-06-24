@@ -16,6 +16,11 @@ from ui.file_picker import render_file_picker
 import urllib.parse
 from dotenv import load_dotenv
 import os
+import telemetry
+
+# Initialise OpenTelemetry once per process. This is idempotent, so it is safe
+# to call here even though Streamlit re-runs this module on every interaction.
+telemetry.init_telemetry()
 
 # TRAVEL_AGENT = "Travel Agency"
 # RESEARCH_AGENT = "Research Assistant"
@@ -165,10 +170,13 @@ def main():
             }
             run_chatbot_graph(langgraph_chain, input_data, config)
         elif chain_selection == INTERNET_RESEARCHER:
-            for s in langgraph_chain.stream({"messages": [HumanMessage(content=user_input)]}, {"recursion_limit": 100}):
-                if "__end__" not in s:
-                    st.write(s)
-                    st.write("---")
+            # Time the whole streamed run as one request. Per-node/LLM/tool spans
+            # are still captured automatically by OpenInference.
+            with telemetry.track_request(INTERNET_RESEARCHER, model_selection):
+                for s in langgraph_chain.stream({"messages": [HumanMessage(content=user_input)]}, {"recursion_limit": 100}):
+                    if "__end__" not in s:
+                        st.write(s)
+                        st.write("---")
         else:
             st.write("Feature under construction")
 
@@ -345,9 +353,16 @@ def run_chatbot_graph(graph, input, config):
 
     user_input = input["messages"][0].content
     st.session_state.chat_history.append({"role": "user", "content": user_input})
-    
-    output = graph.invoke(input, config=config)
-    
+
+    # Custom metrics: count the request, time it, and tally tokens. The detailed
+    # per-node / per-LLM spans are captured automatically by OpenInference.
+    model = os.getenv("OLLAMA_MODEL", "unknown")
+    with telemetry.track_request(RAG_CHATBOT_AGENT, model):
+        output = graph.invoke(input, config=config)
+
+    prompt_tokens, completion_tokens = telemetry.extract_token_usage(output)
+    telemetry.record_tokens(RAG_CHATBOT_AGENT, model, prompt_tokens, completion_tokens)
+
     # Extract AIMessage content from the string output
     if isinstance(output, dict):
         # response_value = str(next(iter(output.values())))

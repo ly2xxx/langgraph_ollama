@@ -1,0 +1,69 @@
+# Observability stack for the LangGraph + Ollama app.
+#
+#   docker compose -f docker-compose.observability.yml up -d
+#
+# This runs ONLY the backends (collector, Tempo, Prometheus, Grafana). The
+# Streamlit app keeps running on the host with `uv run streamlit run app.py` and
+# pushes OTLP to the collector at localhost:4317. Keeping the app on the host
+# means it can still reach your host's Ollama at localhost:11434 with no extra
+# wiring.
+#
+# Endpoints once up:
+#   Grafana       http://localhost:3000   (admin / admin)
+#   Prometheus    http://localhost:9090
+#   Tempo (API)   http://localhost:3200
+#   Collector     OTLP gRPC localhost:4317, OTLP HTTP localhost:4318
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.103.1
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC  (app → collector)
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus metrics endpoint (scraped)
+    depends_on:
+      - tempo
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo query API (Grafana reads this)
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+
+volumes:
+  tempo-data:
+  prometheus-data:
+  grafana-data:

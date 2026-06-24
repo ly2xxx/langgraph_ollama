@@ -1,0 +1,25 @@
+# Prometheus scrape config.
+#
+# We do NOT scrape the Streamlit app directly. Streamlit's re-run model makes a
+# self-hosted /metrics endpoint awkward, so the app pushes metrics via OTLP to
+# the collector, and Prometheus scrapes the collector's :8889 instead.
+
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  # Custom app metrics, re-exported by the OTEL collector.
+  - job_name: "otel-collector"
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  # The collector's own internal telemetry (queue sizes, dropped spans, etc.).
+  - job_name: "otel-collector-internal"
+    static_configs:
+      - targets: ["otel-collector:8888"]
+
+  # Prometheus scraping itself — useful as a liveness sanity check.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

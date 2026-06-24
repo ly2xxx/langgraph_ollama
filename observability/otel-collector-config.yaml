@@ -1,0 +1,49 @@
+# OpenTelemetry Collector — the single ingest point for the app.
+#
+#   app (OTLP gRPC :4317)  ──►  collector  ──►  Tempo      (traces)
+#                                          └──►  Prometheus (metrics, scraped)
+#
+# Keeping a collector in the middle (rather than exporting straight to Tempo)
+# is the production-shaped pattern: the app only ever speaks OTLP, and the
+# collector decides where data goes. Swap a backend without touching the app.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+
+exporters:
+  # Traces → Tempo over OTLP.
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Metrics → exposed on :8889 in Prometheus text format. Prometheus scrapes it.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Turn OTEL resource attributes (service.name, etc.) into metric labels.
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Handy while learning — uncomment to see everything in the collector logs.
+  # debug:
+  #   verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]

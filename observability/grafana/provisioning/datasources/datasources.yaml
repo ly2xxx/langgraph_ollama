@@ -1,0 +1,26 @@
+# Auto-provisioned Grafana datasources. Grafana loads this on startup, so the
+# Prometheus + Tempo connections exist with zero manual clicking.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    uid: prometheus
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    uid: tempo
+    jsonData:
+      # Let trace spans link back to metrics in Prometheus.
+      tracesToMetrics:
+        datasourceUid: prometheus
+      serviceMap:
+        datasourceUid: prometheus
