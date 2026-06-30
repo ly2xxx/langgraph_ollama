@@ -49,6 +49,13 @@ counts, and latency lighting up in real time.
 - **Local model serving** keeps data on-prem — ties into "secure AI solution
   design" and "data handled responsibly."
 
+
+If have time: [127.0.0.1:18789](http://127.0.0.1:18789/)
+
+[www.linkedin.com/in/yang-li-78917021](https://www.linkedin.com/in/yang-li-78917021)
+
+[github.com/ly2xxx/openclaw-control-panel/blob/main/maintenance/install-openclaw.ps1](https://github.com/ly2xxx/openclaw-control-panel/blob/main/maintenance/install-openclaw.ps1)
+
 ## The one-liner
 
 > "RAG and multi-agent orchestration with full OpenTelemetry observability —
