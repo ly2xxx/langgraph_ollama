@@ -6,15 +6,15 @@
 
 ## JD skills this project demonstrates
 
-| JD essential skill | Where it lives |
-|---|---|
-| RAG | `rag_research_chatbot.py`, `tools/rag.py`, `web_researcher.py` |
-| AI agent frameworks & orchestration | LangGraph multi-agent (`mm_agent.py`, `app.py`) |
-| Embeddings / vector search | `nomic-embed-text` embedding pipeline for RAG |
-| Prompt engineering | `web_research_prompts.py` |
-| Model serving | Ollama local serving (`OLLAMA_MODEL`, `OLLAMA_BASE_URL`) |
-| **Observability / monitoring** (lead responsibility) | OpenTelemetry `telemetry.py` + `observability/` stack: OTEL collector, Prometheus, Grafana, Tempo |
-| Python | whole project |
+| JD essential skill                                         | Where it lives                                                                                       |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| RAG                                                        | `rag_research_chatbot.py`, `tools/rag.py`, `web_researcher.py`                                 |
+| AI agent frameworks & orchestration                        | LangGraph multi-agent (`mm_agent.py`, `app.py`)                                                  |
+| Embeddings / vector search                                 | `nomic-embed-text` embedding pipeline for RAG                                                      |
+| Prompt engineering                                         | `web_research_prompts.py`                                                                          |
+| Model serving                                              | Ollama local serving (`OLLAMA_MODEL`, `OLLAMA_BASE_URL`)                                         |
+| **Observability / monitoring** (lead responsibility) | OpenTelemetry`telemetry.py` + `observability/` stack: OTEL collector, Prometheus, Grafana, Tempo |
+| Python                                                     | whole project                                                                                        |
 
 ## Demo flow (≈5 min)
 
@@ -26,7 +26,8 @@ ollama pull nomic-embed-text
 uv sync
 uv run streamlit run app.py
 
-# 2. (Optional but high-impact) bring up the observability stack
+2. (Optional but high-impact) bring up the observability stack
+docker compose -f docker-compose.observability.yml down
 docker compose -f docker-compose.observability.yml up -d
 #    -> Grafana dashboards under observability/grafana
 ```
@@ -47,6 +48,8 @@ counts, and latency lighting up in real time.
   design" and "data handled responsibly."
 
 ## The one-liner
+
 > "RAG and multi-agent orchestration with full OpenTelemetry observability —
 > Prometheus, Grafana, and Tempo — so reliability and cost are measurable, not
 > assumed."
+
