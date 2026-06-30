@@ -175,7 +175,15 @@ def main():
             with telemetry.track_request(INTERNET_RESEARCHER, model_selection):
                 for s in langgraph_chain.stream({"messages": [HumanMessage(content=user_input)]}, {"recursion_limit": 100}):
                     if "__end__" not in s:
-                        st.write(s)
+                        for node_name, node_state in s.items():
+                            st.markdown(f"**Agent**: `{node_name}`")
+                            if isinstance(node_state, dict) and "messages" in node_state:
+                                for msg in node_state["messages"]:
+                                    st.markdown(msg.content)
+                            elif isinstance(node_state, dict) and "next" in node_state:
+                                st.markdown(f"*Routing to → {node_state['next']}*")
+                            else:
+                                st.write(node_state)
                         st.write("---")
         else:
             st.write("Feature under construction")
