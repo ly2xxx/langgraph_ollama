@@ -300,3 +300,4 @@ The `$agent` dashboard variable is populated from
 - **Prometheus** — scrapes + stores time-series metrics; queried with PromQL.
 - **Tempo** — stores distributed traces; queried in Grafana.
 - **Grafana** — single dashboards/Explore UI over both backends.
+
