@@ -214,7 +214,7 @@ docker compose -f docker-compose.observability.yml down
 Now use the **RAG Chatbot Agent** (or **Internet Researcher**) in the UI a few
 times, then open:
 
-- **Grafana** → http://localhost:3000 (admin/admin) → dashboard
+- **Grafana** → http://localhost:3001 (admin/admin) → dashboard
   *"LangGraph + Ollama — LLM Observability"*. Panels fill in within ~10–20s
   (scrape + export interval).
 - **Tempo** (in Grafana → Explore → Tempo datasource) → search by service

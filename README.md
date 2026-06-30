@@ -37,3 +37,5 @@ A generated `requirements.txt` is also exported from the lock for tooling that
 needs it (`uv export --no-hashes -o requirements.txt`).
 
 ![demo](demo/image.png)
+![Internet Researcher](image/README/researcher.png)
+![Open Telemetry](image/README/otel.png)
