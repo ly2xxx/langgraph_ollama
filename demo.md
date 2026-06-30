@@ -23,7 +23,7 @@
 ollama pull nomic-embed-text
 
 # 1. Launch the app
-uv sync
+uv sync --extra observability
 uv run streamlit run app.py
 
 2. (Optional but high-impact) bring up the observability stack
@@ -34,6 +34,8 @@ docker compose -f docker-compose.observability.yml up -d
 
 **Run a RAG query in the UI, then switch to Grafana** to show spans, token
 counts, and latency lighting up in real time.
+
+"What is the order of SQL query execution of SELECT, FROM, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET ?"
 
 ## Talking points (Lead / Architect framing)
 

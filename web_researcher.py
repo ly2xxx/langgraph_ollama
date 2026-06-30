@@ -38,7 +38,7 @@ def create_agent(
     system_prompt += "\nWork autonomously according to your specialty, using the tools available to you."
     system_prompt += " Do not ask for clarification."
     system_prompt += " Your other team members (and other teams) will collaborate with you with their own specialties."
-    system_prompt += " You are chosen for a reason! You are one of the following team members: {team_members}."
+    system_prompt += " You are chosen for a reason! Do your best."
     
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -68,8 +68,11 @@ def create_team_supervisor(llm: ChatOllama, system_prompt: str, members: List[st
             MessagesPlaceholder(variable_name="messages"),
             (
                 "system",
-                "Given the conversation above, who should act next?"
-                " Or should we FINISH? Select one of: {options}",
+                "Given the conversation above, who should act next?\n"
+                "Or should we FINISH? Select one of: {options}.\n\n"
+                "CRITICAL INSTRUCTION: You must respond with ONLY a valid JSON object.\n"
+                "Format: {{\n  \"next\": \"<role>\"\n}}\n"
+                "Do NOT include any other text, reasoning, or formatting."
             ),
         ]
     ).partial(options=str(options), team_members=", ".join(members))
@@ -106,8 +109,9 @@ def create_researcher_graph_workflow(llm: ChatOllama):
         "You are a supervisor tasked with managing a conversation between the"
         " following workers: Search, Web_Scraper. Given the following user request,"
         " respond with the worker to act next. Each worker will perform a"
-        " task and respond with their results and status. When finished,"
-        " respond with FINISH.",
+        " task and respond with their results and status. "
+        "ALWAYS route to a worker (like Search) to answer the user's question, even if you know the answer. "
+        "Only respond with FINISH if a worker has ALREADY answered the user's question in the conversation history.",
         ["Search", "Web_Scraper"],
     )
 
