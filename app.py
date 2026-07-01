@@ -100,6 +100,8 @@ def main():
     elif st.session_state.previous_agent != chain_selection:
         if "chat_history" in st.session_state:
             del st.session_state.chat_history
+        if "last_output" in st.session_state:
+            del st.session_state.last_output
         st.session_state.previous_agent = chain_selection
 
     # Get available models for the selected chain
@@ -194,7 +196,7 @@ def main():
 
     # Add this section to re-render chat history after page reloads
     if chain_selection == RAG_CHATBOT_AGENT and "chat_history" in st.session_state:
-        render_chat_history_and_thoughts(st.session_state.chat_history)
+        render_chat_history_and_thoughts(st.session_state.chat_history, st.session_state.get("last_output"))
 
 def displayGraph(chain, chain_selection):
     # Add mermaid initialization scripts to the page
@@ -382,9 +384,7 @@ def run_chatbot_graph(graph, input, config):
         response = output[ai_message_start:ai_message_end]
     
     st.session_state.chat_history.append({"role": "assistant", "content": response})
-    
-    # Call the render method
-    render_chat_history_and_thoughts(st.session_state.chat_history, output)
+    st.session_state.last_output = output
 
 
 if __name__ == "__main__":

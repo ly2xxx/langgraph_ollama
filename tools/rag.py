@@ -41,7 +41,7 @@ def rag_query(query: str, file_path: str) -> str:
         loader = PyPDFLoader(file_path)
         pages = loader.load_and_split()
     elif file_path.lower().endswith('.md') or file_path.lower().endswith('.txt'):
-        loader = TextLoader(file_path)
+        loader = TextLoader(file_path, encoding="utf-8")
         pages = loader.load()
     elif file_path.lower().endswith('.xlsx'):
         # Get all sheet names

@@ -32,10 +32,28 @@ docker compose -f docker-compose.observability.yml up -d
 #    -> Grafana dashboards under observability/grafana
 ```
 
-**Run a RAG query in the UI, then switch to Grafana** to show spans, token
-counts, and latency lighting up in real time.
+**Run a RAG query in the UI, then switch to Grafana** to show spans, token, counts, and latency lighting up in real time.
 
-"What is the order of SQL query execution of SELECT, FROM, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET ?"
+*"What is the order of SQL query execution of SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET ?"*
+
+*"What is weather forecast for Glasgow tomorrow ?"*
+
+docker exec -it langgraph_ollama-grafana-1 bash
+
+docker exec -it langgraph_ollama-prometheus-1 sh
+
+docker exec -it langgraph_ollama-tempo-1 sh
+
+[**Grafana (Web UI)** http://localhost:3001](http://localhost:3001/) (admin/admin)
+
+**Prometheus (Web UI**) [http://localhost:9090](http://localhost:9090/)
+
+**Tempo (API):** [http://localhost:3200](http://localhost:3200/)
+
+* **OTLP Collector (Endpoints):**
+  * **gRPC (OTLP):** `localhost:4317` (Used by `telemetry.py` / application SDKs to push telemetry)
+  * **HTTP (OTLP):** `localhost:4318`
+
 
 ## Talking points (Lead / Architect framing)
 
