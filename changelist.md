@@ -8,6 +8,19 @@ code change when it lands.
 
 ## Done
 
+- [x] **Feature: distributed tracing across the MCP boundary** — the agent's
+  trace now continues into md-mcp instead of the two services emitting
+  separate traces. Client side: `telemetry.py` instruments httpx
+  (`opentelemetry-instrumentation-httpx`, added to the observability extra)
+  so outbound MCP requests carry the active span's W3C `traceparent` header.
+  Server side (md-mcp repo): the FastMCP middleware extracts `traceparent`
+  from the incoming HTTP request and parents its spans to it. Also fixed a
+  Windows bug where the non-ASCII `→` in the "OTEL active" print raised
+  UnicodeEncodeError on cp1252 consoles and made init report failure.
+  Verified in Tempo: a single trace ID contains `agent.run` +
+  `search_markdown` spans from `langgraph-ollama` and
+  `mcp.tool/search_markdown` + `mcp.request/*` spans from `md-mcp`.
+
 - [x] **Feature: md-mcp as a retrieval tool source** — new
   `tools/mcp_notes.py` connects to a running md-mcp server via
   `langchain-mcp-adapters` (pinned `>=0.1.9,<0.2`; the 0.2 line requires a

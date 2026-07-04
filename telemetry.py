@@ -83,6 +83,18 @@ def _init_tracing(resource) -> None:
     except Exception as exc:  # pragma: no cover - optional dependency
         print(f"[telemetry] LangChain auto-instrumentation unavailable: {exc}")
 
+    # Instrument httpx so outbound HTTP requests carry the active span's W3C
+    # `traceparent` header. This is what links the agent's trace to remote
+    # services that also export OTel — in particular md-mcp tool calls over
+    # streamable-http (see tools/mcp_notes.py) show up as child spans of the
+    # agent run instead of starting a disconnected trace.
+    try:
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+        HTTPXClientInstrumentor().instrument(tracer_provider=provider)
+    except Exception as exc:  # pragma: no cover - optional dependency
+        print(f"[telemetry] httpx instrumentation unavailable: {exc}")
+
 
 def _init_metrics(resource) -> None:
     """Metrics: OTLP pipeline + a small set of custom instruments."""
@@ -155,7 +167,10 @@ def init_telemetry() -> bool:
         _init_tracing(resource)
         _init_metrics(resource)
         _initialized = True
-        print(f"[telemetry] OTEL active → {OTLP_ENDPOINT} (service={SERVICE_NAME})")
+        # ASCII only: a non-ASCII char here raises UnicodeEncodeError on
+        # cp1252 Windows consoles, and the enclosing except would then report
+        # telemetry as failed even though it initialised fine.
+        print(f"[telemetry] OTEL active -> {OTLP_ENDPOINT} (service={SERVICE_NAME})")
         return True
     except Exception as exc:  # pragma: no cover - defensive
         print(f"[telemetry] init failed, running without telemetry: {exc}")

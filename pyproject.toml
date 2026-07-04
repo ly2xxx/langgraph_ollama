@@ -44,4 +44,7 @@ observability = [
     "opentelemetry-sdk>=1.25",
     "opentelemetry-exporter-otlp-proto-grpc>=1.25",
     "openinference-instrumentation-langchain>=0.1.29",
+    # Injects W3C traceparent into outbound httpx calls (MCP tool requests),
+    # linking agent traces with md-mcp server traces.
+    "opentelemetry-instrumentation-httpx>=0.46b0",
 ]
