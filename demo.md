@@ -54,7 +54,6 @@ docker exec -it langgraph_ollama-tempo-1 sh
   * **gRPC (OTLP):** `localhost:4317` (Used by `telemetry.py` / application SDKs to push telemetry)
   * **HTTP (OTLP):** `localhost:4318`
 
-
 ## Talking points (Lead / Architect framing)
 
 - **"I instrument AI systems like production services."** OpenInference auto-
@@ -67,16 +66,22 @@ docker exec -it langgraph_ollama-tempo-1 sh
 - **Local model serving** keeps data on-prem — ties into "secure AI solution
   design" and "data handled responsibly."
 
-
 If have time: [127.0.0.1:18789](http://127.0.0.1:18789/)
 
 [www.linkedin.com/in/yang-li-78917021](https://www.linkedin.com/in/yang-li-78917021)
 
 [github.com/ly2xxx/openclaw-control-panel/blob/main/maintenance/install-openclaw.ps1](https://github.com/ly2xxx/openclaw-control-panel/blob/main/maintenance/install-openclaw.ps1)
 
+Grafana is the goat... Let's deploy the LGTM stack (Loki/Grafana/Tempo/Prometheus)
+
+[www.youtube.com/watch?v=1X3dV3D5EJg](https://www.youtube.com/watch?v=1X3dV3D5EJg)
+
+OpenTelemetry & Grafana: The Tools Every Backend Engineer Needs
+
+[www.youtube.com/watch?v=xCeS1ki-jx8](https://www.youtube.com/watch?v=xCeS1ki-jx8)
+
 ## The one-liner
 
 > "RAG and multi-agent orchestration with full OpenTelemetry observability —
 > Prometheus, Grafana, and Tempo — so reliability and cost are measurable, not
 > assumed."
-
