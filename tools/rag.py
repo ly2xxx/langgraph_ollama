@@ -14,6 +14,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from langchain_core.documents import Document
 import base64
+import hashlib
 import os
 import streamlit as st
 import logging
@@ -22,6 +23,35 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+# In-process FAISS index cache keyed by (file path, file content hash, embed
+# model). Embedding a document with local Ollama takes seconds; without this
+# every rag_query call rebuilt the index from scratch even for an unchanged
+# file. Keyed on content hash so edits invalidate naturally.
+_INDEX_CACHE: dict = {}
+_INDEX_CACHE_MAX = 8  # small LRU-ish bound; a chat session touches few files
+
+
+def _file_digest(file_path: str) -> str:
+    h = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _get_or_build_index(file_path: str, texts, embeddings, embed_model: str):
+    key = (file_path, _file_digest(file_path), embed_model)
+    db = _INDEX_CACHE.get(key)
+    if db is None:
+        db = FAISS.from_documents(texts, embeddings)
+        if len(_INDEX_CACHE) >= _INDEX_CACHE_MAX:
+            _INDEX_CACHE.pop(next(iter(_INDEX_CACHE)))
+        _INDEX_CACHE[key] = db
+        logging.info(f"FAISS index built and cached for {file_path}")
+    else:
+        logging.info(f"FAISS index cache hit for {file_path}")
+    return db
 
 
 class RAGInput(BaseModel):
@@ -76,11 +106,12 @@ def rag_query(query: str, file_path: str) -> str:
             logging.info(warning_response)
             return warning_response
             
+        embed_model = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
         embeddings = OllamaEmbeddings(
-            model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
+            model=embed_model,
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         )
-        db = FAISS.from_documents(texts, embeddings)
+        db = _get_or_build_index(file_path, texts, embeddings, embed_model)
 
         docs = db.similarity_search(query)
 

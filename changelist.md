@@ -5,8 +5,6 @@ code change when it lands.
 
 ## Planned
 
-- [ ] **Perf: cache FAISS index per file** — `rag_query` re-embeds the whole
-  document on every call; cache the index keyed by file content hash.
 - [ ] **Observability: cover all agents** — `track_request()` + token metrics
   currently wrap only the Internet Researcher; extend to RAG Chatbot and
   Article Writer.
@@ -19,6 +17,13 @@ code change when it lands.
   markdown knowledge-base tool with zero local indexing.
 
 ## Done
+
+- [x] **Perf: cache FAISS index per file** — `tools/rag.py` now keeps an
+  in-process index cache keyed by `(file path, sha256 of file bytes, embed
+  model)` with a small size bound. Unchanged files skip re-embedding entirely
+  (previously every `rag_query` call re-embedded the whole document through
+  Ollama); editing the file invalidates the entry via the content hash.
+  Verified with FakeEmbeddings: cache hit on repeat query, rebuild on edit.
 
 - [x] **Fix: `tools/rag.py` hardcoded Ollama URL** — `OllamaEmbeddings` now
   reads `OLLAMA_BASE_URL` (falling back to `http://localhost:11434`) so
