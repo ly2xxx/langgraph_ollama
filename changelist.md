@@ -5,8 +5,6 @@ code change when it lands.
 
 ## Planned
 
-- [ ] **Fix: `tools/rag.py` hardcoded Ollama URL** — embeddings ignore
-  `OLLAMA_BASE_URL` and always hit `http://localhost:11434`.
 - [ ] **Perf: cache FAISS index per file** — `rag_query` re-embeds the whole
   document on every call; cache the index keyed by file content hash.
 - [ ] **Observability: cover all agents** — `track_request()` + token metrics
@@ -21,6 +19,11 @@ code change when it lands.
   markdown knowledge-base tool with zero local indexing.
 
 ## Done
+
+- [x] **Fix: `tools/rag.py` hardcoded Ollama URL** — `OllamaEmbeddings` now
+  reads `OLLAMA_BASE_URL` (falling back to `http://localhost:11434`) so
+  embeddings follow the same server as the chat model. Embedding model is also
+  configurable via new `OLLAMA_EMBED_MODEL` env (default `nomic-embed-text`).
 
 - [x] **Fix: stop tracking `.env`** — `git rm --cached .env` (file stays on
   disk, git stops tracking it; `.gitignore` already listed it but ignore rules

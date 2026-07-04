@@ -14,6 +14,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from langchain_core.documents import Document
 import base64
+import os
 import streamlit as st
 import logging
 
@@ -75,7 +76,10 @@ def rag_query(query: str, file_path: str) -> str:
             logging.info(warning_response)
             return warning_response
             
-        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url="http://localhost:11434")
+        embeddings = OllamaEmbeddings(
+            model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        )
         db = FAISS.from_documents(texts, embeddings)
 
         docs = db.similarity_search(query)
