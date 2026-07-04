@@ -5,12 +5,19 @@ code change when it lands.
 
 ## Planned
 
-- [ ] **Feature: md-mcp as a retrieval tool source** — optionally load MCP
-  tools (search_markdown etc.) from a running md-mcp server via
-  `langchain-mcp-adapters`, configured with `MD_MCP_URL`; agents gain a
-  markdown knowledge-base tool with zero local indexing.
 
 ## Done
+
+- [x] **Feature: md-mcp as a retrieval tool source** — new
+  `tools/mcp_notes.py` connects to a running md-mcp server via
+  `langchain-mcp-adapters` (pinned `>=0.1.9,<0.2`; the 0.2 line requires a
+  newer langchain-core than our 0.3.x stack) and exposes its MCP tools
+  (`search_markdown`, `list_files`, `rescan_folder`) as sync-wrapped
+  LangChain tools. Enabled by setting `MD_MCP_URL` (see `.env.example`);
+  unset or unreachable degrades to `[]` with a 60s negative-cache, so the app
+  runs unchanged without it. `rag_research_chatbot.local_rag` now appends
+  these tools to the RAG agent's toolset. Verified live against
+  `md-mcp:local` in Docker: all 3 tools discovered and callable synchronously.
 
 - [x] **Cleanup: SqliteSaver monkeypatch + hardcoded paths** — `mm_agent.py`
   now constructs `SqliteSaver(conn=sqlite3.connect(":memory:",

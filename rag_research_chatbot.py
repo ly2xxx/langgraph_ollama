@@ -52,14 +52,17 @@ class RAGResearchChatbot:
     #     return {"summary": response}
 
     def local_rag(self, state: State):
-        rag_agent = self.create_agent(self.LLM, [rag_query], RAG_SYSTEM_PROMPT)
+        # Base tool plus, when MD_MCP_URL is configured and reachable, the
+        # md-mcp markdown knowledge-base tools (search_markdown, list_files...).
+        tools = [rag_query] + load_md_mcp_tools()
+        rag_agent = self.create_agent(self.LLM, tools, RAG_SYSTEM_PROMPT)
         response = rag_agent.invoke({
             "messages": [
                 HumanMessage(content=f"Query: {state['query']}\nFile Path: {state['file_path']}")
             ],
             "query": state["query"],
             "file_path": state["file_path"],
-            "tools": [rag_query]
+            "tools": tools
         })
         return {"summary": response["output"]}
 
