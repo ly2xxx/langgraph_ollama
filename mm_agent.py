@@ -10,8 +10,12 @@ from langchain_community.adapters.openai import convert_openai_messages
 from langchain_ollama import ChatOllama
 import os
 
+import telemetry
+
 MODEL=os.getenv('OLLAMA_MODEL')
 BASE_URL=os.getenv('OLLAMA_BASE_URL')
+
+AGENT_NAME = "Article Writer"
 
 class WriterAgent:
 
@@ -312,7 +316,10 @@ class ArticleWriterStateMachine:
         return self.chain
 
     def start(self):
-        result=self.chain.invoke("",self.thread)
+        # Request metric for the graph run; per-node/LLM spans come from
+        # OpenInference auto-instrumentation.
+        with telemetry.track_request(AGENT_NAME, MODEL or "unknown"):
+            result=self.chain.invoke("",self.thread)
         #print("*",self.chain.get_state(self.thread),"*")
         #print("r",result)
         if result is None:
@@ -338,7 +345,8 @@ class ArticleWriterStateMachine:
         except Exception as e:
             values[last_state]['raw'] = None
             self.chain.update_state(self.thread,values[last_state])
-        result=self.chain.invoke(None,self.thread,output_keys=last_state)
+        with telemetry.track_request(AGENT_NAME, MODEL or "unknown"):
+            result=self.chain.invoke(None,self.thread,output_keys=last_state)
         #print("r",result)
         if result is None:
             values=self.chain.get_state(self.thread).values

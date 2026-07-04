@@ -5,9 +5,6 @@ code change when it lands.
 
 ## Planned
 
-- [ ] **Observability: cover all agents** — `track_request()` + token metrics
-  currently wrap only the Internet Researcher; extend to RAG Chatbot and
-  Article Writer.
 - [ ] **Cleanup: SqliteSaver monkeypatch + hardcoded paths** — replace the
   `from_conn_stringx` classmethod hack in `mm_agent.py` with the supported
   constructor; parameterize `D:\code\...` paths in `__main__` test blocks.
@@ -17,6 +14,14 @@ code change when it lands.
   markdown knowledge-base tool with zero local indexing.
 
 ## Done
+
+- [x] **Observability: cover all agents** — Article Writer graph runs
+  (`mm_agent.py` `start()`/`resume()`) are now wrapped in
+  `telemetry.track_request("Article Writer", ...)`, covering both the app.py
+  and mm_st.py entry paths. Internet Researcher now also records per-node
+  token metrics in the stream loop (`app.py`) via
+  `extract_token_usage`/`record_tokens`. (RAG Chatbot was already fully
+  instrumented in `run_chatbot_graph`.)
 
 - [x] **Perf: cache FAISS index per file** — `tools/rag.py` now keeps an
   in-process index cache keyed by `(file path, sha256 of file bytes, embed

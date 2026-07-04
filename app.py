@@ -180,6 +180,8 @@ def main():
                         for node_name, node_state in s.items():
                             st.markdown(f"**Agent**: `{node_name}`")
                             if isinstance(node_state, dict) and "messages" in node_state:
+                                p_tok, c_tok = telemetry.extract_token_usage(node_state)
+                                telemetry.record_tokens(INTERNET_RESEARCHER, model_selection, p_tok, c_tok)
                                 for msg in node_state["messages"]:
                                     st.markdown(msg.content)
                             elif isinstance(node_state, dict) and "next" in node_state:
