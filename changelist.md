@@ -5,9 +5,6 @@ code change when it lands.
 
 ## Planned
 
-- [ ] **Fix: stop tracking `.env`** — remove from git index (already in
-  `.gitignore` but tracked, so a real `TAVILY_API_KEY` would be committed);
-  add `.env.example` with placeholders.
 - [ ] **Fix: `tools/rag.py` hardcoded Ollama URL** — embeddings ignore
   `OLLAMA_BASE_URL` and always hit `http://localhost:11434`.
 - [ ] **Perf: cache FAISS index per file** — `rag_query` re-embeds the whole
@@ -25,4 +22,8 @@ code change when it lands.
 
 ## Done
 
-(entries move here as they land)
+- [x] **Fix: stop tracking `.env`** — `git rm --cached .env` (file stays on
+  disk, git stops tracking it; `.gitignore` already listed it but ignore rules
+  don't apply to tracked files). Added `.env.example` with placeholder values
+  as the committed template. Prevents a real `TAVILY_API_KEY` from ever being
+  committed by `git commit -a`.
