@@ -187,7 +187,9 @@ if __name__ == "__main__":
         # state["messages"].append(HumanMessage(content=user_input))
         # run_chatbot_graph(chatbot_graph, {"messages": state["messages"]}, config)
 
-        file_path = "D:\code\langgraph_agents\output\Bradford-1day.pdf"
+        file_path = os.getenv("RAG_TEST_FILE", "")
+        if not file_path:
+            print("Set RAG_TEST_FILE to a PDF/MD path to include a document in the query.")
         query = user_input
         state["messages"].append(HumanMessage(content=f"Query: {query}\nFile Path: {file_path}"))
         run_chatbot_graph(chatbot_graph, {"messages": state["messages"]}, config)

@@ -243,17 +243,16 @@ class ArticleWriterStateMachine:
         self.revise_prompt = revise_prompt or "You are a blog editor. Your sole purpose is to edit a well-written article about a topic based on given critique"
         
         # Rest of initialization...
-        import os
         from langgraph.checkpoint.sqlite import SqliteSaver
         import sqlite3
-        
-        def from_conn_stringx(cls, conn_string: str,) -> "SqliteSaver":
-            return SqliteSaver(conn=sqlite3.connect(conn_string, check_same_thread=False))
-        SqliteSaver.from_conn_stringx=classmethod(from_conn_stringx)
 
         from dotenv import load_dotenv
         load_dotenv()
-        self.memory = SqliteSaver.from_conn_stringx(":memory:")
+        # check_same_thread=False: Streamlit invokes the graph from different
+        # script-run threads than the one that created the connection.
+        self.memory = SqliteSaver(
+            conn=sqlite3.connect(":memory:", check_same_thread=False)
+        )
 
         start_agent=StartAgent()
         input_agent=InputAgent()

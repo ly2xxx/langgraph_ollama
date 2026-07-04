@@ -5,15 +5,21 @@ code change when it lands.
 
 ## Planned
 
-- [ ] **Cleanup: SqliteSaver monkeypatch + hardcoded paths** — replace the
-  `from_conn_stringx` classmethod hack in `mm_agent.py` with the supported
-  constructor; parameterize `D:\code\...` paths in `__main__` test blocks.
 - [ ] **Feature: md-mcp as a retrieval tool source** — optionally load MCP
   tools (search_markdown etc.) from a running md-mcp server via
   `langchain-mcp-adapters`, configured with `MD_MCP_URL`; agents gain a
   markdown knowledge-base tool with zero local indexing.
 
 ## Done
+
+- [x] **Cleanup: SqliteSaver monkeypatch + hardcoded paths** — `mm_agent.py`
+  now constructs `SqliteSaver(conn=sqlite3.connect(":memory:",
+  check_same_thread=False))` directly instead of monkeypatching a
+  `from_conn_stringx` classmethod onto the class (supported since
+  langgraph-checkpoint-sqlite 2.x). The `D:\code\langgraph_agents\...` paths
+  in the `__main__` blocks of `tools/rag.py` and `rag_research_chatbot.py`
+  were replaced with a `RAG_TEST_FILE` env var (plus `RAG_TEST_QUERY`), which
+  also removes the `SyntaxWarning: invalid escape sequence` noise on import.
 
 - [x] **Observability: cover all agents** — Article Writer graph runs
   (`mm_agent.py` `start()`/`resume()`) are now wrapped in

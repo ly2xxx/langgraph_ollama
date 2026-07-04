@@ -127,12 +127,9 @@ if __name__ == "__main__":
     #Enable logging
     logging.basicConfig(level=logging.INFO)
     
-    # Example with PDF
-    pdf_path = "D:\code\langgraph_agents\output\Glasgow-1day.pdf"
-    pdf_query = "What is the main topic of this document?"
-    print(rag_query.run({"query": pdf_query, "file_path": pdf_path}))
-
-    # Example with Markdown
-    md_path = "D:\code\langgraph_agents\output\DDDvsTDD.md"
-    md_query = "Summarize the content of this Markdown file."
-    print(rag_query.run({"query": md_query, "file_path": md_path}))
+    # Point RAG_TEST_FILE at any local PDF or Markdown file to try a query.
+    test_path = os.getenv("RAG_TEST_FILE")
+    if not test_path:
+        raise SystemExit("Set RAG_TEST_FILE to a PDF or Markdown file path.")
+    test_query = os.getenv("RAG_TEST_QUERY", "What is the main topic of this document?")
+    print(rag_query.run({"query": test_query, "file_path": test_path}))
