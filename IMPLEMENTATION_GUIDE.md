@@ -256,7 +256,7 @@ The `$agent` dashboard variable is populated from
 
 1. Open the Grafana dashboard side-by-side with the app.
 2. Send a few RAG queries, then an Internet Researcher query; watch **request
-   rate** and **token throughput** climb and the `$agent` panel split by agent.
+   rate** and **token throughput** climb and the `$agent` panel split by agent. *"List the markdown files from your md-mcp knowledge base"*
 3. Point at **p95 latency** — "this is Ollama generation time, not network."
 4. Jump to **Tempo**, open one trace — "here's that same request broken down by
    graph node; the `rag` node did retrieval, the `conversation` node called the
@@ -300,4 +300,3 @@ The `$agent` dashboard variable is populated from
 - **Prometheus** — scrapes + stores time-series metrics; queried with PromQL.
 - **Tempo** — stores distributed traces; queried in Grafana.
 - **Grafana** — single dashboards/Explore UI over both backends.
-

@@ -1,14 +1,14 @@
 """Optional MCP tool source: consume an md-mcp server as LangChain tools.
 
-If ``MD_MCP_URL`` is set (e.g. ``http://localhost:8000/mcp`` for a local
-md-mcp Docker container in streamable-http mode), this module connects via
-``langchain-mcp-adapters`` and exposes the server's tools
+If ``MD_MCP_FOLDER`` is set (e.g. to a local path containing markdown files),
+this module dynamically spawns an md-mcp Docker container using stdio transport,
+connects via ``langchain-mcp-adapters``, and exposes the server's tools
 (``search_markdown``, ``list_files``, ...) as LangChain tools the RAG agent
 can call. The agent then gets a personal-notes knowledge base with zero local
 indexing — retrieval stays in md-mcp, where it is chunked, cached and (if the
 collector is up) OTel-traced.
 
-If ``MD_MCP_URL`` is unset or the server is unreachable, ``load_md_mcp_tools``
+If ``MD_MCP_FOLDER`` is unset or the server is unreachable, ``load_md_mcp_tools``
 returns ``[]`` and the app behaves exactly as before.
 """
 
@@ -52,8 +52,8 @@ def load_md_mcp_tools() -> List:
     """Return LangChain tools backed by the md-mcp server, or [] if unavailable."""
     global _cached_tools, _last_failure_at
 
-    url = os.getenv("MD_MCP_URL")
-    if not url:
+    folder = os.getenv("MD_MCP_FOLDER")
+    if not folder:
         return []
 
     if _cached_tools is not None:
@@ -65,15 +65,30 @@ def load_md_mcp_tools() -> List:
         from langchain_mcp_adapters.client import MultiServerMCPClient
 
         client = MultiServerMCPClient(
-            {"md_notes": {"url": url, "transport": "streamable_http"}}
+            {
+                "md_notes": {
+                    "command": "docker",
+                    "args": [
+                        "run",
+                        "-i",
+                        "--rm",
+                        "-e",
+                        "MD_TRANSPORT=stdio",
+                        "-v",
+                        f"{folder}:/data",
+                        "ly2xxx/md-mcp:latest"
+                    ],
+                    "transport": "stdio"
+                }
+            }
         )
         async_tools = asyncio.run(client.get_tools())
         _cached_tools = [_sync_wrap(t) for t in async_tools]
         logger.info(
-            "md-mcp connected at %s: %s", url, [t.name for t in _cached_tools]
+            "md-mcp connected via docker stdio to folder %s: %s", folder, [t.name for t in _cached_tools]
         )
         return _cached_tools
     except Exception as exc:
         _last_failure_at = time.monotonic()
-        logger.warning("md-mcp unavailable at %s (%s) - continuing without it", url, exc)
+        logger.warning("md-mcp unavailable for folder %s (%s) - continuing without it", folder, exc)
         return []

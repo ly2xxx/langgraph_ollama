@@ -131,6 +131,15 @@ def main():
     
     displayGraph(langgraph_chain, chain_selection)
 
+    if chain_selection == RAG_CHATBOT_AGENT:
+        with st.sidebar:
+            st.header("MCP Settings")
+            md_folder = os.getenv("MD_MCP_FOLDER")
+            if md_folder:
+                st.success(f"**md-mcp** is automatically connected via Docker using folder:\n\n`{md_folder}`")
+            else:
+                st.warning("**md-mcp** is disabled. Set `MD_MCP_FOLDER` in `.env` to a local folder to enable it.")
+
     # Get user input
     user_input = st.text_area("Enter your query:", key=f"query_{chain_selection}")
 
