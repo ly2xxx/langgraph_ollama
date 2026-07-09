@@ -60,7 +60,7 @@ class RAGInput(BaseModel):
 
 @tool("rag_query", args_schema=RAGInput)
 def rag_query(query: str, file_path: str) -> str:
-    """Query a PDF or Markdown document using RAG (Retrieval-Augmented Generation). Or extract Image binary data to pass on to the next Agent."""
+    """Query a local PDF or Markdown document using RAG. Do not use for 'md://' paths (use the MCP tools for those instead)."""
     
     # Initialize session state for image data
     if "image_data" not in st.session_state:
@@ -69,11 +69,19 @@ def rag_query(query: str, file_path: str) -> str:
     pages = query
     # Determine file type and load accordingly
     if file_path.lower().endswith('.pdf'):
-        loader = PyPDFLoader(file_path)
-        pages = loader.load_and_split()
+        try:
+            loader = PyPDFLoader(file_path)
+            pages = loader.load_and_split()
+        except Exception as e:
+            return f"Error loading PDF {file_path}: {e}"
     elif file_path.lower().endswith('.md') or file_path.lower().endswith('.txt'):
-        loader = TextLoader(file_path, encoding="utf-8")
-        pages = loader.load()
+        if file_path.startswith("md://"):
+            return "Error: rag_query is for local disk files only. For 'md://' files, please use the specific MCP server read tool."
+        try:
+            loader = TextLoader(file_path, encoding="utf-8")
+            pages = loader.load()
+        except Exception as e:
+            return f"Error loading text file {file_path}: {e}"
     elif file_path.lower().endswith('.xlsx'):
         # Get all sheet names
         excel_file = pd.ExcelFile(file_path)
