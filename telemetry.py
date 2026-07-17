@@ -14,6 +14,10 @@ Design goals
    span per graph node + per LLM call, with token counts). On top of that we
    record a few *custom* metrics (request count, latency, tokens) that make for
    clean Prometheus/Grafana panels.
+4. **Logs ride along.** A ``LoggingHandler`` on the root logger ships every
+   stdlib ``logging`` record over OTLP (collector → Loki). Records emitted
+   inside an active span automatically carry trace_id/span_id, so log lines
+   link to their Tempo trace in Grafana with no per-call-site changes.
 
 Stack note: this app is on the LangChain/LangGraph 0.3.x line using the
 ``langchain-ollama`` partner package. OpenInference instruments at the LangChain
@@ -96,6 +100,46 @@ def _init_tracing(resource) -> None:
         print(f"[telemetry] httpx instrumentation unavailable: {exc}")
 
 
+def _init_logging(resource) -> None:
+    """Logs: OTLP pipeline + a handler bridging stdlib ``logging`` into it.
+
+    Existing ``logging.info(...)`` calls across the app (tools/rag.py,
+    tools/mcp_notes.py, ...) are exported unchanged. The OTel handler stamps
+    each record with the active span's trace_id/span_id, which is what powers
+    the Loki ↔ Tempo cross-links provisioned in Grafana.
+    """
+    import logging
+
+    from opentelemetry._logs import set_logger_provider
+    from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+
+    provider = LoggerProvider(resource=resource)
+    provider.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter(endpoint=OTLP_ENDPOINT, insecure=True))
+    )
+    set_logger_provider(provider)
+
+    handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+    root = logging.getLogger()
+    root.addHandler(handler)
+    # The handler only sees records the root logger lets through. Its default
+    # level is WARNING, and tools/rag.py's basicConfig(INFO) is a silent no-op
+    # whenever some other handler got attached first — so enforce INFO here
+    # rather than depending on import order.
+    if root.getEffectiveLevel() > logging.INFO:
+        root.setLevel(logging.INFO)
+
+    # One guaranteed line per process start — a smoke signal that the
+    # app → collector → Loki pipeline is alive, visible in Grafana.
+    logging.getLogger(__name__).info(
+        "telemetry logs pipeline active (service=%s, endpoint=%s)",
+        SERVICE_NAME,
+        OTLP_ENDPOINT,
+    )
+
+
 def _init_metrics(resource) -> None:
     """Metrics: OTLP pipeline + a small set of custom instruments."""
     global _meter, _request_counter, _request_duration, _token_counter, _active_requests
@@ -166,6 +210,12 @@ def init_telemetry() -> bool:
         resource = _build_resource()
         _init_tracing(resource)
         _init_metrics(resource)
+        # Logs are additive — if the pipeline can't come up, keep traces and
+        # metrics rather than failing telemetry as a whole.
+        try:
+            _init_logging(resource)
+        except Exception as exc:  # pragma: no cover - optional pipeline
+            print(f"[telemetry] log export unavailable: {exc}")
         _initialized = True
         # ASCII only: a non-ASCII char here raises UnicodeEncodeError on
         # cp1252 Windows consoles, and the enclosing except would then report

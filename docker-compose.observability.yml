@@ -2,7 +2,7 @@
 #
 #   docker compose -f docker-compose.observability.yml up -d
 #
-# This runs ONLY the backends (collector, Tempo, Prometheus, Grafana). The
+# This runs ONLY the backends (collector, Tempo, Loki, Prometheus, Grafana). The
 # Streamlit app keeps running on the host with `uv run streamlit run app.py` and
 # pushes OTLP to the collector at localhost:4317. Keeping the app on the host
 # means it can still reach your host's Ollama at localhost:11434 with no extra
@@ -12,6 +12,7 @@
 #   Grafana       http://localhost:3000   (admin / admin)
 #   Prometheus    http://localhost:9090
 #   Tempo (API)   http://localhost:3200
+#   Loki  (API)   http://localhost:3100
 #   Collector     OTLP gRPC localhost:4317, OTLP HTTP localhost:4318
 
 services:
@@ -26,6 +27,7 @@ services:
       - "8889:8889"   # Prometheus metrics endpoint (scraped)
     depends_on:
       - tempo
+      - loki
 
   tempo:
     image: grafana/tempo:2.5.0
@@ -35,6 +37,15 @@ services:
       - tempo-data:/var/tempo
     ports:
       - "3200:3200"   # Tempo query API (Grafana reads this)
+
+  loki:
+    image: grafana/loki:3.1.0
+    command: ["-config.file=/etc/loki.yaml"]
+    volumes:
+      - ./observability/loki.yaml:/etc/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"   # Loki API (Grafana reads this; collector pushes OTLP logs)
 
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -62,8 +73,10 @@ services:
     depends_on:
       - prometheus
       - tempo
+      - loki
 
 volumes:
   tempo-data:
+  loki-data:
   prometheus-data:
   grafana-data:

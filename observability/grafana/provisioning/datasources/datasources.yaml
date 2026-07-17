@@ -1,5 +1,5 @@
 # Auto-provisioned Grafana datasources. Grafana loads this on startup, so the
-# Prometheus + Tempo connections exist with zero manual clicking.
+# Prometheus + Tempo + Loki connections exist with zero manual clicking.
 
 apiVersion: 1
 
@@ -24,3 +24,27 @@ datasources:
         datasourceUid: prometheus
       serviceMap:
         datasourceUid: prometheus
+      # "Logs for this span" button on every span: query Loki for log lines
+      # whose structured-metadata trace_id matches the span's trace.
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-5m"
+        spanEndTimeShift: "5m"
+        customQuery: true
+        query: '{service_name=~".+"} | trace_id = "${__span.traceId}"'
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    uid: loki
+    jsonData:
+      # Log lines ingested via OTLP carry trace_id as structured metadata;
+      # surface it as a clickable link into the matching Tempo trace.
+      derivedFields:
+        - name: TraceID
+          datasourceUid: tempo
+          matcherType: label
+          matcherRegex: trace_id
+          url: "$${__value.raw}"
+          urlDisplayLabel: "View trace"

@@ -13,22 +13,24 @@ Streamlit app. This guide explains *what* was added, *why* each piece exists, an
 
 ## 1. The mental model (read this first)
 
-There are two kinds of telemetry, and people constantly confuse them:
+There are three kinds of telemetry, and people constantly confuse them:
 
 | Signal            | Question it answers                                   | Backend here | Example                                                            |
 | ----------------- | ----------------------------------------------------- | ------------ | ------------------------------------------------------------------ |
 | **Metrics** | "How much / how fast, aggregated over time?"          | Prometheus   | p95 latency, requests/sec, tokens/sec                              |
 | **Traces**  | "What happened in*this one* request, step by step?" | Tempo        | This query spent 4.2s in the`rag` node, 1.1s in `conversation` |
+| **Logs**    | "What did the code say while it happened?"            | Loki         | "FAISS index cache hit for report.pdf" — linked to its trace     |
 
-**OpenTelemetry (OTEL)** is the vendor-neutral *plumbing* that produces both. Your
-app emits OTEL data once; the **Collector** routes metrics to Prometheus and
-traces to Tempo. **Grafana** is the single UI that reads both.
+**OpenTelemetry (OTEL)** is the vendor-neutral *plumbing* that produces all
+three. Your app emits OTEL data once; the **Collector** routes metrics to
+Prometheus, traces to Tempo, and logs to Loki. **Grafana** is the single UI
+that reads all of them.
 
 ```
-                                  ┌── traces ──►  Tempo  ◄─┐
-  Streamlit app  ──OTLP:4317──►  Collector                 ├──►  Grafana :3000
-  (telemetry.py)                  └── metrics ─►  Prometheus ◄┘
-                                     (scrapes collector :8889)
+                                  ┌── traces ──►  Tempo  ◄────┐
+  Streamlit app  ──OTLP:4317──►  Collector ── metrics ─►  Prometheus ──►  Grafana :3000
+  (telemetry.py)                  └── logs ───►  Loki  ◄─────┘
+                                     (Prometheus scrapes collector :8889)
 ```
 
 Why a Collector in the middle instead of exporting straight to each backend?
@@ -62,17 +64,25 @@ a portfolio.
 telemetry.py                          # OTEL init + custom metrics (the only app code)
 app.py                                # 3 small hooks (init + wrap RAG + wrap Researcher)
 pyproject.toml                        # [project.optional-dependencies] observability
-docker-compose.observability.yml      # collector + tempo + prometheus + grafana
+docker-compose.observability.yml      # collector + tempo + loki + prometheus + grafana
 observability/
-  otel-collector-config.yaml          # OTLP in → Tempo + Prometheus out
+  otel-collector-config.yaml          # OTLP in → Tempo + Prometheus + Loki out
   prometheus.yml                      # scrape the collector
   tempo.yaml                          # single-binary local trace store
+  loki.yaml                           # single-binary local log store
   grafana/
     provisioning/
-      datasources/datasources.yaml    # auto-wire Prometheus + Tempo
+      datasources/datasources.yaml    # auto-wire Prometheus + Tempo + Loki
       dashboards/dashboards.yaml      # auto-load the dashboard
     dashboards/langgraph-ollama.json  # the LLM dashboard
 ```
+
+Logs need no per-call-site changes either: `telemetry.py` attaches an OTel
+`LoggingHandler` to the root logger, so every stdlib `logging` call (e.g. the
+FAISS cache messages in `tools/rag.py`, the md-mcp connection messages in
+`tools/mcp_notes.py`) is exported over OTLP. Records emitted inside an active
+span carry its trace_id, so in Grafana you can jump from a log line to its
+trace ("View trace") and from a span to its log lines ("Logs for this span").
 
 The agent code (`mm_agent.py`, `rag_research_chatbot.py`, `web_researcher.py` and
 their LangGraph nodes) was **not touched**. All per-node/per-LLM tracing comes

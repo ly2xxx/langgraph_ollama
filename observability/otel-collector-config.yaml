@@ -1,7 +1,8 @@
 # OpenTelemetry Collector — the single ingest point for the app.
 #
 #   app (OTLP gRPC :4317)  ──►  collector  ──►  Tempo      (traces)
-#                                          └──►  Prometheus (metrics, scraped)
+#                                          ├──►  Prometheus (metrics, scraped)
+#                                          └──►  Loki       (logs)
 #
 # Keeping a collector in the middle (rather than exporting straight to Tempo)
 # is the production-shaped pattern: the app only ever speaks OTLP, and the
@@ -33,6 +34,11 @@ exporters:
     resource_to_telemetry_conversion:
       enabled: true
 
+  # Logs → Loki over its native OTLP ingestion endpoint. Log attributes
+  # (trace_id, span_id, level, ...) land as structured metadata.
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
   # Handy while learning — uncomment to see everything in the collector logs.
   # debug:
   #   verbosity: detailed
@@ -47,3 +53,7 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/loki]
