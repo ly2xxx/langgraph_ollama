@@ -12,10 +12,10 @@
     "otel"
   ],
   "time": {
-    "from": "now-30m",
+    "from": "now-15m",
     "to": "now"
   },
-  "refresh": "10s",
+  "refresh": "5s",
   "templating": {
     "list": [
       {
@@ -151,6 +151,76 @@
       ]
     },
     {
+      "id": 10,
+      "type": "table",
+      "title": "Recent traces (click ID to open the waterfall)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{resource.service.name=\"langgraph-ollama\"}",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "logs",
+      "title": "Live application logs (Loki \u2014 lines link to traces)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=\"langgraph-ollama\"}",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    },
+    {
       "id": 5,
       "type": "timeseries",
       "title": "Latency percentiles (s)",
@@ -158,7 +228,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 5
+        "y": 13
       },
       "datasource": {
         "type": "prometheus",
@@ -195,7 +265,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 5
+        "y": 13
       },
       "datasource": {
         "type": "prometheus",
@@ -217,7 +287,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -239,7 +309,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 14
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -257,41 +327,6 @@
           "refId": "A"
         }
       ]
-    },
-    {
-      "id": 9,
-      "type": "logs",
-      "title": "Application logs (Loki)",
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 22
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "expr": "{service_name=\"langgraph-ollama\"}",
-          "queryType": "range"
-        }
-      ],
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "wrapLogMessage": true,
-        "sortOrder": "Descending",
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "prettifyLogMessage": false
-      }
     }
   ]
 }

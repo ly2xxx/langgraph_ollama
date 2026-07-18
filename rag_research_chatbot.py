@@ -150,10 +150,6 @@ class RAGResearchChatbot:
         memory = SqliteSaver(self.CONN)
         return workflow.compile(checkpointer=memory)
 
-# Usage
-rag_research_chatbot = RAGResearchChatbot()
-chatbot_graph = rag_research_chatbot.create_rag_research_chatbot_graph()
-
 # Run the graph
 # async def run_chatbot_graph(graph, input):
 #     async for output in graph.astream(input):
@@ -176,7 +172,7 @@ def run_chatbot_graph(graph, input, config):
     print("\n---\n")
 
 if __name__ == "__main__":
-    chatbot_graph = rag_research_chatbot.create_rag_research_chatbot_graph()
+    chatbot_graph = RAGResearchChatbot().create_rag_research_chatbot_graph()
     state = {"messages": []}
     config = {"configurable": {"thread_id": "1"}}
 

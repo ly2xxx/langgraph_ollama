@@ -58,6 +58,22 @@ CHAIN_CONFIG = {
     }
 }
 
+# Canned queries for interview demos — chosen to route reliably to the right
+# tools (md-mcp notes under demo-notes/ for the RAG agent) and produce rich
+# traces. Selecting one pre-fills the query box; it stays editable.
+DEMO_QUERIES = {
+    RAG_CHATBOT_AGENT: [
+        "Search my notes: what is the logical execution order of a SQL SELECT query?",
+        "From my notes, what are the incident response steps when agent answers are slow?",
+        "According to my notes, why does context engineering beat prompt engineering?",
+        "List the files in my markdown knowledge base.",
+    ],
+    INTERNET_RESEARCHER: [
+        "What is the weather forecast for Glasgow tomorrow?",
+        "What's new in the latest LangGraph release?",
+    ],
+}
+
 def process_uploaded_files(uploaded_files, support_types):
     temp_file_paths = []
     suffixes = ['.' + file_type for file_type in support_types]
@@ -89,6 +105,24 @@ def get_llm(model_selection):
         from langchain_ollama import ChatOllama
         return ChatOllama(model=model_selection, base_url=os.getenv('OLLAMA_BASE_URL'), temperature=0)
 
+@st.cache_resource(show_spinner="Building agent graph...")
+def build_chain(chain_selection: str, model_selection: str):
+    """Build only the selected agent's graph, once per (agent, model) pair.
+
+    Cached across Streamlit reruns — previously all three agents were
+    constructed from scratch on every interaction. Note the Article Writer
+    graph built here is only used for the topology picture; mm_st.py keeps
+    its own checkpointed instance in session state for the HITL flow.
+    """
+    llm = get_llm(model_selection)
+    if chain_selection == RAG_CHATBOT_AGENT:
+        return RAGResearchChatbot(llm).create_rag_research_chatbot_graph()
+    if chain_selection == ARTICLE_WRITER:
+        return ArticleWriterStateMachine().getGraph()
+    if chain_selection == INTERNET_RESEARCHER:
+        return WebResearcher(llm).create_graph()
+    return None
+
 def main():
     st.title("Multi-agent Assistant Demo")
 
@@ -107,38 +141,39 @@ def main():
     # Get available models for the selected chain
     available_models = CHAIN_CONFIG[chain_selection]["models"]
     model_selection = st.selectbox("Select LLM model", available_models)
-    llm = get_llm(model_selection)
-    # web_research = WebResearchGraph(llm)
-    rag_chatbot = RAGResearchChatbot(llm)
-    article_writer = ArticleWriterStateMachine()
-    web_researcher_agent = WebResearcher(llm)
 
-    langgraph_chain = None
-    # if chain_selection == TRAVEL_AGENT:
-    #     langgraph_chain = create_travel_agent_graph()
-    # elif chain_selection == RESEARCH_AGENT:
-    #     langgraph_chain = web_research.create_web_research_graph()
-    # elif chain_selection == RAG_RESEARCH_AGENT:
-    #     langgraph_chain = web_research.create_web_research_rag_graph()
-    if chain_selection == RAG_CHATBOT_AGENT:
-        langgraph_chain = rag_chatbot.create_rag_research_chatbot_graph()
-    elif chain_selection == ARTICLE_WRITER:
-        langgraph_chain = article_writer.getGraph()
-    elif chain_selection == INTERNET_RESEARCHER:
-        langgraph_chain = web_researcher_agent.create_graph()
-    else:
-        langgraph_chain = None
-    
+    langgraph_chain = build_chain(chain_selection, model_selection)
+
     displayGraph(langgraph_chain, chain_selection)
 
     if chain_selection == RAG_CHATBOT_AGENT:
         with st.sidebar:
             st.header("MCP Settings")
+            md_url = os.getenv("MD_MCP_URL")
             md_folder = os.getenv("MD_MCP_FOLDER")
-            if md_folder:
-                st.success(f"**md-mcp** is automatically connected via Docker using folder:\n\n`{md_folder}`")
+            if md_url:
+                st.success(f"**md-mcp** connected over streamable-http (distributed tracing on):\n\n`{md_url}`")
+            elif md_folder:
+                st.success(f"**md-mcp** is automatically connected via Docker (stdio) using folder:\n\n`{md_folder}`")
             else:
-                st.warning("**md-mcp** is disabled. Set `MD_MCP_FOLDER` in `.env` to a local folder to enable it.")
+                st.warning("**md-mcp** is disabled. Set `MD_MCP_URL` or `MD_MCP_FOLDER` in `.env` to enable it.")
+
+    # Canned demo queries: choosing one pre-fills the query box (still editable).
+    demo_queries = DEMO_QUERIES.get(chain_selection) or []
+    if demo_queries:
+        placeholder = "(choose a demo query)"
+
+        def _fill_query():
+            sel = st.session_state.get(f"demo_query_{chain_selection}")
+            if sel and sel != placeholder:
+                st.session_state[f"query_{chain_selection}"] = sel
+
+        st.selectbox(
+            "Demo queries (optional)",
+            [placeholder] + demo_queries,
+            key=f"demo_query_{chain_selection}",
+            on_change=_fill_query,
+        )
 
     # Get user input
     user_input = st.text_area("Enter your query:", key=f"query_{chain_selection}")
@@ -210,19 +245,32 @@ def main():
         render_chat_history_and_thoughts(st.session_state.chat_history, st.session_state.get("last_output"))
 
 def displayGraph(chain, chain_selection):
-    # Add mermaid initialization scripts to the page
-    st.markdown("""
-        <script src="mermaid.min.js"></script>
-        <script>mermaid.initialize({startOnLoad:true});</script>
-    """, unsafe_allow_html=True)
-    
-    # Display the graph visualization
-    graph = chain.get_graph(xray=True)
-    mermaid_png = graph.draw_mermaid_png()
-    png_bytes = BytesIO(mermaid_png)
-    image = Image.open(png_bytes)
+    """Render the agent's graph topology.
 
-    new_height = 460  # Desired width in pixels
+    draw_mermaid_png() calls the remote mermaid.ink service, so the PNG is
+    cached on disk keyed by the graph's mermaid source — reruns (and offline
+    demos) never repeat the network call. Falls back to showing the mermaid
+    source text if the image can't be produced at all.
+    """
+    import hashlib
+    from pathlib import Path
+
+    graph = chain.get_graph(xray=True)
+    mermaid_src = graph.draw_mermaid()
+    cache_dir = Path(".cache/graph-png")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    png_path = cache_dir / (hashlib.sha256(mermaid_src.encode()).hexdigest()[:16] + ".png")
+
+    if not png_path.exists():
+        try:
+            png_path.write_bytes(graph.draw_mermaid_png())
+        except Exception:
+            with st.expander(f"{chain_selection} — graph diagram (image service unreachable)"):
+                st.code(mermaid_src)
+            return
+
+    image = Image.open(BytesIO(png_path.read_bytes()))
+    new_height = 460  # Desired height in pixels
     new_width = int(new_height * image.width / image.height)  # Maintain aspect ratio
     new_image = image.resize((new_width, new_height))
     st.image(new_image, caption=chain_selection)
@@ -387,7 +435,12 @@ def run_chatbot_graph(graph, input, config):
     # Extract AIMessage content from the string output
     if isinstance(output, dict):
         # response_value = str(next(iter(output.values())))
-         response = output["messages"][-1].content
+        # Last message with actual content: after summarization prunes the
+        # history, messages[-1] can be an empty/removed placeholder.
+        response = next(
+            (m.content for m in reversed(output["messages"]) if getattr(m, "content", "")),
+            "",
+        )
     else:
         # Find AIMessage content in the string
         ai_message_start = output.find("AIMessage(content='") + len("AIMessage(content='")
