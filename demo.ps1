@@ -14,7 +14,7 @@ param(
     [switch]$ChecksOnly
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue" # "Stop" causes NativeCommandError on docker stderr
 $RepoRoot = $PSScriptRoot
 Set-Location $RepoRoot
 
@@ -86,7 +86,7 @@ if ($mdFolder) {
 }
 
 Step "Pre-flight: Docker engine"
-docker info 2>$null | Out-Null
+cmd /c "docker info >nul 2>nul"
 if ($LASTEXITCODE -ne 0) {
     Warn "Docker engine not responding - starting Docker Desktop..."
     Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
@@ -94,11 +94,11 @@ if ($LASTEXITCODE -ne 0) {
     $deadline = (Get-Date).AddMinutes(6)
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Seconds 5
-        docker info 2>$null | Out-Null
+        cmd /c "docker info >nul 2>nul"
         if ($LASTEXITCODE -eq 0) { break }
     }
 }
-docker info 2>$null | Out-Null
+cmd /c "docker info >nul 2>nul"
 if ($LASTEXITCODE -eq 0) { Ok "Docker engine up" }
 else { Fail "Docker engine did not come up" "start Docker Desktop manually, then re-run" }
 
@@ -137,7 +137,7 @@ try {
 
 Step "Pre-flight: md-mcp Docker image"
 if ($mdFolder) {
-    docker image inspect ly2xxx/md-mcp:latest 2>$null | Out-Null
+    cmd /c "docker image inspect ly2xxx/md-mcp:latest >nul 2>nul"
     if ($LASTEXITCODE -eq 0) { Ok "ly2xxx/md-mcp:latest present" }
     else {
         Warn "pulling ly2xxx/md-mcp:latest..."
@@ -174,7 +174,7 @@ while ((Get-Date) -lt $deadline -and -not ($grafanaOk -and $lokiOk)) {
               if ($h.database -eq "ok") { $grafanaOk = $true; Ok "Grafana healthy (http://localhost:3001)" } } catch {}
     }
     if (-not $lokiOk) {
-        try { $r = Invoke-WebRequest -Uri "http://localhost:3100/ready" -TimeoutSec 3
+        try { $r = Invoke-WebRequest -Uri "http://localhost:3100/ready" -TimeoutSec 3 -UseBasicParsing
               if ($r.Content -match "ready") { $lokiOk = $true; Ok "Loki ready" } } catch {}
     }
     if (-not ($grafanaOk -and $lokiOk)) { Start-Sleep -Seconds 4 }
@@ -195,7 +195,7 @@ if ($mdUrl -and $mdUrl -match "localhost:8000" -and $mdFolder) {
     if ($existing) {
         Ok "md-mcp-demo container already running"
     } else {
-        docker rm -f md-mcp-demo 2>$null | Out-Null
+        cmd /c "docker rm -f md-mcp-demo >nul 2>nul"
         docker run -d --name md-mcp-demo `
             -p 8000:8000 `
             -e MD_TRANSPORT=http `
