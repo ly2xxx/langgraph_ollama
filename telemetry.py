@@ -95,7 +95,25 @@ def _init_tracing(resource) -> None:
     try:
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
-        HTTPXClientInstrumentor().instrument(tracer_provider=provider)
+        def request_hook(span, request):
+            if hasattr(request, "content") and request.content:
+                span.set_attribute(
+                    "http.request.body", 
+                    request.content.decode("utf-8", errors="ignore")
+                )
+
+        def response_hook(span, request, response):
+            if hasattr(response, "content") and response.content:
+                span.set_attribute(
+                    "http.response.body", 
+                    response.content.decode("utf-8", errors="ignore")
+                )
+
+        HTTPXClientInstrumentor().instrument(
+            tracer_provider=provider,
+            request_hook=request_hook,
+            response_hook=response_hook
+        )
     except Exception as exc:  # pragma: no cover - optional dependency
         print(f"[telemetry] httpx instrumentation unavailable: {exc}")
 
