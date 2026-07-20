@@ -63,7 +63,7 @@ def _build_resource():
 
 
 def _init_tracing(resource) -> None:
-    """Traces: one OTLP pipeline + OpenInference LangChain auto-instrumentation."""
+    """Traces(Tempo): one OTLP pipeline + OpenInference LangChain auto-instrumentation."""
     from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -119,7 +119,7 @@ def _init_tracing(resource) -> None:
 
 
 def _init_logging(resource) -> None:
-    """Logs: OTLP pipeline + a handler bridging stdlib ``logging`` into it.
+    """Logs(Loki): OTLP pipeline + a handler bridging stdlib ``logging`` into it.
 
     Existing ``logging.info(...)`` calls across the app (tools/rag.py,
     tools/mcp_notes.py, ...) are exported unchanged. The OTel handler stamps
@@ -159,7 +159,7 @@ def _init_logging(resource) -> None:
 
 
 def _init_metrics(resource) -> None:
-    """Metrics: OTLP pipeline + a small set of custom instruments."""
+    """Metrics(Prometheus ): OTLP pipeline + a small set of custom instruments."""
     global _meter, _request_counter, _request_duration, _token_counter, _active_requests
 
     from opentelemetry import metrics
