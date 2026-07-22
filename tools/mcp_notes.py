@@ -52,36 +52,74 @@ def _openinference_span_context(callbacks):
     for exactly the duration of the MCP call.
     """
     try:
-        run_id = getattr(callbacks, "parent_run_id", None)
-        if run_id is None:
-            return None
-        from openinference.instrumentation.langchain import LangChainInstrumentor
         from opentelemetry import trace as trace_api
 
-        span = LangChainInstrumentor().get_span(run_id)
-        if span is None:
-            return None
-        return trace_api.set_span_in_context(span)
+        if callbacks is not None:
+            from openinference.instrumentation.langchain import LangChainInstrumentor
+
+            run_id = getattr(callbacks, "run_id", None) or getattr(callbacks, "parent_run_id", None)
+            if run_id is not None:
+                inst = LangChainInstrumentor()
+                span = inst.get_span(run_id)
+                if span is None:
+                    parent_run_id = getattr(callbacks, "parent_run_id", None)
+                    if parent_run_id and parent_run_id != run_id:
+                        span = inst.get_span(parent_run_id)
+
+                if span is not None:
+                    return trace_api.set_span_in_context(span)
+
+        # Fallback: if an OTel span is already active in current context, preserve it
+        curr_span = trace_api.get_current_span()
+        if curr_span and curr_span.get_span_context().is_valid:
+            return trace_api.set_span_in_context(curr_span)
+
+        return None
     except Exception:
         return None
 
 
 def _sync_wrap(async_tool):
-    """MCP adapter tools are async-only; AgentExecutor here runs sync."""
+    """MCP adapter tools are async-only; wrap for both sync and async callers with OTel context."""
     from langchain_core.tools import StructuredTool
 
+    def _get_context(callbacks, kwargs):
+        cb = callbacks or kwargs.get("run_manager") or kwargs.get("callbacks")
+        return _openinference_span_context(cb)
+
+    def _clean_kwargs(kwargs):
+        if async_tool.args_schema:
+            try:
+                valid_keys = set(async_tool.args_schema.model_fields.keys())
+                return {k: v for k, v in kwargs.items() if k in valid_keys}
+            except Exception:
+                pass
+        return {k: v for k, v in kwargs.items() if k not in ("callbacks", "run_manager", "config")}
+
     def _run(callbacks=None, **kwargs):
-        # Attach the agent trace's span around the MCP round-trip so the
-        # instrumented httpx client propagates its traceparent — this is what
-        # stitches md-mcp's spans into the same distributed trace.
         token = None
-        ctx = _openinference_span_context(callbacks)
+        ctx = _get_context(callbacks, kwargs)
         if ctx is not None:
             from opentelemetry import context as context_api
 
             token = context_api.attach(ctx)
         try:
-            return asyncio.run(async_tool.ainvoke(kwargs))
+            return asyncio.run(async_tool.ainvoke(_clean_kwargs(kwargs)))
+        finally:
+            if token is not None:
+                from opentelemetry import context as context_api
+
+                context_api.detach(token)
+
+    async def _arun(callbacks=None, **kwargs):
+        token = None
+        ctx = _get_context(callbacks, kwargs)
+        if ctx is not None:
+            from opentelemetry import context as context_api
+
+            token = context_api.attach(ctx)
+        try:
+            return await async_tool.ainvoke(_clean_kwargs(kwargs))
         finally:
             if token is not None:
                 from opentelemetry import context as context_api
@@ -90,7 +128,7 @@ def _sync_wrap(async_tool):
 
     return StructuredTool.from_function(
         func=_run,
-        coroutine=async_tool.ainvoke,
+        coroutine=_arun,
         name=async_tool.name,
         description=async_tool.description,
         args_schema=async_tool.args_schema,
