@@ -86,7 +86,7 @@ class Plan(TypedDict):
 class Lesson(TypedDict):        # a node in the thought graph (GoT)
     attempt: int
     plan_id: str
-    failure_signature: str       # normalised: (phase, test id, error class, top frame)
+    failure_signature: str       # normalised — recipe in §3.4
     insight: str                 # one-sentence takeaway from diagnose
 
 class CodingLoopState(TypedDict):
@@ -139,19 +139,52 @@ Checkpointer: `SqliteSaver` (file-backed, not `:memory:` — resumability is the
 
 **bdd_gate** — no LLM. Runs the frozen scenario suite (`pytest features/ -q` with pytest-bdd). This is the objective half of the checker gate.
 
-**diagnose** — LLM classifies the failure (syntax | test-logic | env | flake | design), computes the normalised `failure_signature`, and appends a one-line `Lesson`. Routing logic (pure code, no LLM):
-- signature == previous signature → active plan `exhausted` (no-progress rule);
-- attempts left on plan and new signature → back to **code**;
-- plan exhausted, plans remain, total budget ok → back to **plan_tot**;
-- otherwise → **escalate**.
+**diagnose** — LLM classifies the failure (syntax | test-logic | env | flake | design), computes the `failure_signature` (recipe in §3.4), and appends a one-line `Lesson`. Routing is pure code, no LLM: run the §3.4 hard-exit checks in order; else retry **code** while attempts remain on the plan; else next plan via **plan_tot**. A `flake` classification gets one free retry without burning an attempt. Diagnose entry (and review entry) also checks the **stop flag** — see §4.
 
-**review (checker)** — adversarial sub-agent, separate prompt ("assume the maker is wrong; find where the diff satisfies the letter of the tests but not the spec"), temperature 0, model from `CHECKER_MODEL` env var (defaults to `OLLAMA_MODEL`; a different model is better when available). Sees **spec + diff + step definitions + test output** — not the maker's reasoning, to avoid contamination. Specifically audits step defs for trivial-pass hacks (its job since the maker wrote them under frozen `.feature` files). Reject findings become lessons → diagnose.
+**review (checker)** — adversarial sub-agent, separate prompt ("assume the maker is wrong; find where the diff satisfies the letter of the tests but not the spec"), temperature 0, model from `CHECKER_MODEL` env var (defaults to `OLLAMA_MODEL`; a different model is better when available). Sees **spec + diff + step definitions + test output** — not the maker's reasoning, to avoid contamination. Specifically audits step defs for trivial-pass hacks (its job since the maker wrote them under frozen `.feature` files). Output is structured, never prose:
+
+```python
+class Finding(TypedDict):
+    location: str        # file:symbol
+    severity: str        # blocker | major | minor
+    rationale: str
+    suggested_fix: str
+
+class ReviewVerdict(TypedDict):
+    verdict: str         # approve | approve_with_notes | reject
+    findings: list[Finding]
+```
+
+Only `blocker`/`major` findings may produce `reject`; `minor`-only → `approve_with_notes` (notes land in the run report, not back in the loop). Each rejecting finding maps 1:1 onto a `Lesson` and gets a failure signature (§3.4), so a maker/checker stalemate is caught by the same no-progress rule as test failures.
 
 **finalize** — commits to the run branch, writes `run-report.md` (goal, plan history, attempts, lessons, final test/BDD output, diff stat) into `.loop/state/coding-engineer/<run_id>/`, updates the state JSON. Optional later: `gh pr create`.
 
 **escalate** — same report plus best-so-far diff and the reason (budget | no-progress | unsuitable goal). Worktree is left in place for the human.
 
-### 3.4 Where ToT/GoT apply — and where they don't
+### 3.4 Failure signatures & hard exits
+
+The no-progress detector is only as good as its signature normalisation, so the recipe is spec, not implementation detail:
+
+```
+signature = sha1(phase | normalised_test_name | error_class | message_template | top_frame_func)
+```
+
+- `phase`: `self_check | bdd_gate | review` (closed set).
+- `normalised_test_name`: pytest nodeid minus parametrisation suffix (`test_add[3-5]` → `test_add`). Keeping the test name is what makes a *different* failing test correctly read as progress rather than a stall.
+- `error_class`: exception type from the parsed traceback.
+- `message_template`: exception message with file paths, line numbers, hex addresses, durations and timestamps regex-stripped.
+- `top_frame_func`: **function name only** from the innermost in-worktree frame — no file, no line number (line numbers churn as the agent edits). Tiebreaker so generic templates (`AssertionError: expected N got M`) don't over-merge distinct bugs into a premature no-progress verdict.
+
+Reviewer rejections are signed too: `(review, finding.location, severity)` per blocking finding — the maker/checker stalemate is no-progress by another name.
+
+**Hard exits**, checked in `diagnose` in this order:
+
+1. Same signature twice in a row → active plan `exhausted`.
+2. **Two consecutive plans exhausted → escalate.** Don't try a third — lesson aggregation has steered into a local minimum, and a fresh plan built on the same lessons will land in the same place.
+3. Reviewer rejects twice with the same signature → escalate (the checker isn't fixing the maker; iterating won't either).
+4. Any budget breached (attempts, wall clock, tokens) → escalate. Token budget is a **hard stop** at this checkpoint, not a warning.
+
+### 3.5 Where ToT/GoT apply — and where they don't
 
 | Phase | Technique | Why |
 |---|---|---|
@@ -160,7 +193,6 @@ Checkpointer: `SqliteSaver` (file-backed, not `:memory:` — resumability is the
 | Coding / fixing | **Neither** — single chain + tests | Real feedback (pytest output) beats simulated deliberation; tests are a better judge than an LLM. |
 | Review | Adversarial single agent | Maker/checker split matters more than search here. |
 
-This keeps LLM spend focused where the report's economics section says it should be: deliberation is cheap at plan level, expensive at execution level.
 
 ---
 
@@ -168,10 +200,11 @@ This keeps LLM spend focused where the report's economics section says it should
 
 | Rail | Implementation |
 |---|---|
-| Filesystem jail | All file tools resolve paths, reject anything outside `worktree_dir`; frozen features + `.git` internals in a read-only set. |
-| Command allowlist | `run_command` permits only `pytest`, `ruff`, `python`, `git` (status/diff/add/commit inside worktree). No `pip install` by default (opt-in flag). |
-| Timeouts | `subprocess.run(args_list, timeout=...)` — list args, no shell, Windows-safe. |
-| Stop rules | attempts caps, no-progress detection, `recursion_limit≈150`, wall-clock check in diagnose, token tally via `telemetry.extract_token_usage`. |
+| Filesystem jail | Every mutating op (write, patch, **delete, move/rename**) funnels through one guard: `os.path.realpath` on both source and destination (symlink-proof, incl. Windows), `is_relative_to(worktree_dir)` check, then frozen-set check (feature files, `.git` internals). Violations are **surfaced to the maker as tool errors, never silently swallowed** — the error text is learning signal, and silent blocks hide bugs. |
+| Command allowlist | Binaries: `pytest`, `ruff`, `python`. `git` narrowed to a **subcommand allowlist** (`status`, `diff`, `add`, `commit`, `log`, `rev-parse`); `-c`, `--exec*`, `--upload-pack`, hooks-path and editor flags rejected outright. No `pip install` unless `CODING_ENGINEER_ALLOW_INSTALL=true`. |
+| Subprocess hygiene | `cwd=worktree_dir` always — never inherited. Sanitised env (minimal `PATH`, `GIT_*` stripped). `subprocess.run(args_list, timeout=...)` — list args, no shell, Windows-safe. |
+| Stop rules | attempts caps, §3.4 hard exits, `recursion_limit≈150`, wall-clock check in diagnose, token tally via `telemetry.extract_token_usage`. |
+| Kill switch | UI Stop button writes a **stop flag** (`.loop/state/coding-engineer/<run_id>/STOP`); diagnose and review entry check it — every attempt passes through one of the two, so worst-case halt latency is one attempt, bounded by `cmd_timeout_s`. Flag → escalate("stopped by user"); run can resume by `run_id` or be abandoned cleanly. (Deliberately *not* `interrupt_after` on every attempt — that pauses unconditionally and demands a resume each cycle, which is a HITL gate, not a kill switch. The interrupt pattern is reserved for optional scenario approval, §8 Q1.) |
 | Blast radius | Worktree branch only; user's checkout untouched; human merges. |
 
 ---
@@ -212,7 +245,7 @@ Env additions (`.env.example`): `CHECKER_MODEL` (optional), `CODING_ENGINEER_ALL
 |---|---|---|
 | **0 — Scaffolding** | `tools/code_exec.py`, `tools/worktree.py`, `sample_target/`, deps | Unit tests prove: jail blocks escapes + frozen writes; runner enforces timeout; worktree create/cleanup round-trips on Windows. |
 | **1 — Linear loop** | intake → author_bdd → single fixed plan → code → self_check → bdd_gate → finalize | Solves the sample kata unattended from the CLI (`python coding_engineer.py`), ≤3 attempts, branch + report produced. |
-| **2 — Rails & memory** | diagnose, signatures, no-progress, budgets, escalate, disk state, resume | Impossible goal escalates within budget; identical failure twice → plan exhausted; killed run resumes from checkpoint. |
+| **2 — Rails & memory** | diagnose, §3.4 signatures + hard exits, budgets, escalate, disk state, resume, stop flag | Impossible goal escalates within budget; identical failure twice → plan exhausted; two exhausted plans → escalate; Stop button halts at next attempt boundary; killed run resumes from checkpoint. |
 | **3 — ToT / GoT / checker** | plan_tot (k=3 + judge), lesson aggregation, adversarial review, `CHECKER_MODEL` | Seeded bad plan → observable plan switch with lessons in report; seeded trivial-pass step def → reviewer rejects. |
 | **4 — UI & polish** | app.py integration, streaming, telemetry, demo queries, README | End-to-end demo from Streamlit; graph diagram renders; tokens/latency visible in observability stack. |
 
@@ -222,25 +255,27 @@ Each phase is independently shippable; Phase 1 alone is already a working (if na
 
 ## 7. Risks & mitigations
 
+Repo-specific risks only — the generic loop failure modes (token runaway, context rot, overconfident termination) are covered by the report's §7–§8 rails, all adopted above.
+
 | Risk | Mitigation |
 |---|---|
-| Local-model structured-output brittleness (already seen in `mm_agent.py` JSON handling) | `with_structured_output` everywhere + one retry with error fed back; regex-free JSON repair fallback; judge/diagnose schemas kept tiny. |
+| Local-model structured-output brittleness (already seen in `mm_agent.py` JSON handling) | `with_structured_output` everywhere + one retry with the error fed back; judge/diagnose/review schemas kept tiny. |
 | Maker games the gate | Frozen features, reviewer audits step defs, human merge. |
-| Token runaway | Budgets in state, checked in diagnose; `recursion_limit`; report's routing advice — heavy prompts only in plan/review nodes. |
 | Context rot on long runs | Nodes get curated state slices (spec, active plan, last failure, lessons digest) — never the full message history. |
-| Streamlit rerun kills a long run | Checkpointed graph resumes by `run_id`; demo runs are minutes-scale; background execution is a Phase-5 option, not a blocker. |
-| Windows quirks (paths, quoting) | `pathlib` throughout; subprocess list-args; worktree paths kept short under `.loop/worktrees/`. |
-| Flaky tests → false failure signals | diagnose classifies `flake` → one free retry without burning an attempt. |
+| Streamlit rerun kills a long run | Checkpointed graph resumes by `run_id`; stop flag gives a clean halt; background execution is a later option, not a blocker. |
+| Windows quirks (paths, quoting) | `pathlib` + `os.path.realpath`; subprocess list-args; worktree paths kept short under `.loop/worktrees/`. |
 
 ---
 
 ## 8. Open questions (for review before Phase 0)
 
-1. Should author_bdd offer an **optional** HITL pause to approve scenarios before the loop goes non-stop (Article-Writer-style interrupt, default off)? Cheap insurance that the frozen goal matches intent.
+1. Should author_bdd offer an **optional** HITL pause to approve scenarios before the loop goes non-stop (Article-Writer-style `interrupt`, default off)? Cheap insurance that the frozen goal matches intent.
 2. Is a second local model available for `CHECKER_MODEL`? Maker/checker on the same model still helps (different prompt/temperature) but a different model catches more.
-3. Python-only targets for v1? (Assumed yes — gates are pytest/ruff. Other stacks = pluggable gate commands later.)
-4. Token budget enforcement: hard-stop mid-run, or warn-and-continue? (Plan assumes hard-stop at diagnose checkpoints.)
+
+Resolved in-text: v1 targets are **Python-only** (gates are pytest/ruff; other stacks become pluggable gate commands later), and the token budget is a **hard stop** at the §3.4 checkpoint, not a warning.
 
 ---
 
 *Plan drafted 2026-07-24. Sources: `loop-engineering-report.md` (five primitives + memory, two gates, stop rules, suitability test); Yao et al., "Tree of Thoughts" (2023); Besta et al., "Graph of Thoughts" (2023); existing patterns in `web_researcher.py` (supervisor/agent nodes), `mm_agent.py` (maker/critique loop + interrupts), `rag_research_chatbot.py` (SqliteSaver + tool agents), `telemetry.py`.*
+
+![coding_engineer_plan](coding_engineer_plan.png)
