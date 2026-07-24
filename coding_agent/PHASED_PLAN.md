@@ -277,6 +277,43 @@ the unit and graph level.
 
 ---
 
+## Phase 1 follow-up — second live-run bug: tool arg-schema collision ✅
+
+The `json_schema`/retry fix got past `intake`, but the second live run
+failed differently, in `code`: `run_pytest() got an unexpected keyword
+argument 'v__args'`. Root cause confirmed by reproducing it directly against
+the installed `langchain-core`: `run_pytest`'s parameter was named `args`,
+and pydantic's function-wrapping internals (used by `@tool`'s schema
+inference) reserve `args`/`kwargs` as synthetic field names for wrapping
+Python's own `*args`/`**kwargs`. A real parameter named `args` collides with
+that reservation and gets silently renamed to `v__args` in the generated
+schema — and its type is coerced from `string` to `array` in the process.
+So the tool-calling model, told (correctly, by its own understanding of the
+tool) to pass a string, was handed a schema that actually required a list
+under a different field name; there was no way for it to succeed. Confirmed
+with a two-line repro before and after the fix (`t.args` showed
+`{'v__args': {'type': 'array', ...}}` for the old name, `{'pytest_args':
+{'type': 'string', ...}}` for the new one).
+
+**Fix:** renamed the parameter to `pytest_args`. **Verified:** a new
+regression test checks every maker tool's actual invocation schema (via
+`tool.args`, not the underlying Python function) for the reserved-name
+collision, and invokes `run_pytest` the way a tool-calling agent would —
+through `.invoke({"pytest_args": ...})` — to prove it actually works, not
+just that the schema looks right. 49/49 tests pass; ruff clean.
+
+**On "the graph doesn't show":** the panel code was inspected line by line
+and no bug was found — `render_graph_diagram` is the same mermaid.ink logic
+the other three agents already use (now shared via `ui/graph_display.py`
+instead of duplicated), and it degrades to a **collapsed** `st.expander`
+titled "... image service unreachable" if the mermaid.ink service can't be
+reached, rather than failing loudly. That's the most likely explanation —
+worth confirming whether the other three agents' graphs render either,
+since they now go through the identical code path. Not something this round
+changed or could independently verify without a live browser session.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

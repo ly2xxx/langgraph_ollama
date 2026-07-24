@@ -250,6 +250,36 @@ def test_intake_structured_failure_escalates_with_report(kata_target, monkeypatc
     assert "structured-output failure" in report_text
 
 
+# -- tool arg-schema collisions (live-run fix) -------------------------------
+
+
+def test_maker_tools_have_no_reserved_field_collisions(tmp_path):
+    """Regression test for the second live-run failure: a tool parameter
+    literally named `args` (run_pytest's original signature) collides with
+    pydantic's function-wrapping internals, which silently rename it to
+    `v__args` AND change its type from string to array in the generated
+    schema -- so a tool-calling model passing a plain string for it always
+    fails with 'unexpected keyword argument'. Checks every maker tool's
+    *actual* invocation schema (not just the underlying Python function)
+    for the reserved names, and proves each tool is actually callable the
+    way a tool-calling agent would call it -- via a dict of named args,
+    not a direct Python call."""
+    root = tmp_path / "worktree"
+    root.mkdir()
+    jail = Jail(root=root)
+    tools = _build_maker_tools(jail, {"cmd_timeout_s": 5})
+
+    reserved = {"v__args", "v__kwargs", "v__positional_only", "args", "kwargs"}
+    for t in tools:
+        schema_fields = set(t.args.keys())
+        assert not (schema_fields & reserved), f"{t.name} has a reserved field name collision: {schema_fields}"
+
+    run_pytest_tool = next(t for t in tools if t.name == "run_pytest")
+    assert run_pytest_tool.args["pytest_args"]["type"] == "string"
+    result = run_pytest_tool.invoke({"pytest_args": "--collect-only"})
+    assert "returncode=" in result
+
+
 # -- stop flag ---------------------------------------------------------------
 
 

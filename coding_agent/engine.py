@@ -258,10 +258,17 @@ def _build_maker_tools(jail: Jail, budgets: Budgets) -> list:
             return f"ERROR: {exc}"
 
     @tool
-    def run_pytest(args: str = "") -> str:
+    def run_pytest(pytest_args: str = "") -> str:
         """Run pytest inside the worktree to check your work before finishing.
-        `args` is an optional space-separated string of extra pytest arguments."""
-        extra = args.split() if args else []
+        `pytest_args` is an optional space-separated string of extra pytest arguments."""
+        # Deliberately not named `args` -- pydantic's function-wrapping internals
+        # (used by @tool's schema inference) reserve that name as a synthetic
+        # field for wrapping Python's own *args, so a real parameter literally
+        # named `args` silently gets renamed to `v__args` in the generated
+        # schema, which the tool-calling model then can't satisfy. Confirmed
+        # live: this was the exact "run_pytest() got an unexpected keyword
+        # argument 'v__args'" failure from the first two live runs.
+        extra = pytest_args.split() if pytest_args else []
         result = run_command("pytest", ["-q", *extra], cwd=jail.root, timeout_s=budgets["cmd_timeout_s"])
         return f"returncode={result.returncode}\n{result.stdout}\n{result.stderr}"
 
