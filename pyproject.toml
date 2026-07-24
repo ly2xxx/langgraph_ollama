@@ -42,6 +42,22 @@ dependencies = [
     "ruff>=0.6",
 ]
 
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+# EXE002 (executable bit set but no shebang) fires on every file on some
+# mounted/network filesystems that always report the executable bit,
+# regardless of actual content -- not a meaningful signal for this project
+# (no shell-invoked scripts), and specifically noisy for the Coding Engineer
+# agent's self_check/bdd_gate gates (coding_agent/CODING_ENGINEER.md §4),
+# which run `ruff check .` against arbitrary target worktrees.
+# UP017 (prefer the `datetime.UTC` alias over `timezone.utc`) -- both are
+# correct on this project's Python >=3.12 floor; `timezone.utc` is kept
+# because it's also what a dev/CI environment pinned to an older
+# interpreter can run, and there's no functional difference.
+ignore = ["EXE002", "UP017"]
+
 [project.optional-dependencies]
 # Observability stack — install with: uv sync --extra observability
 # Kept optional so the core app has no hard dependency on OpenTelemetry.
