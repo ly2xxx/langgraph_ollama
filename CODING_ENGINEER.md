@@ -104,6 +104,8 @@ class CodingLoopState(TypedDict):
     candidate_plans: list[Plan]
     active_plan_id: str
     lessons: list[Lesson]        # the GoT substrate
+    hitl_bdd_approval: bool      # from CODING_AGENT_HITL_BDD_APPROVAL, default False
+    bdd_ambiguity_reason: str | None   # set by author_bdd if it judges a pause warranted
     # iteration
     attempt: int                 # within active plan
     total_attempts: int
@@ -126,9 +128,11 @@ Checkpointer: `SqliteSaver` (file-backed, not `:memory:` — resumability is the
 
 **author_bdd** — LLM writes `features/*.feature` (Gherkin) + `features/steps/` (or pytest-bdd step defs) expressing the acceptance criteria, plus any missing pytest scaffolding. After this node, feature files enter the jail's **read-only set**. Rationale: BDD-first makes the goal executable and human-readable; freezing prevents the maker gaming the gate.
 
+*Optional HITL pause (default off).* If `hitl_bdd_approval` is set, the same call that drafts the scenarios also self-assesses ambiguity and returns `{scenarios, ambiguity: bool, ambiguity_reason}`. Only when `ambiguity` is true does the node call `interrupt()` (same mechanism as `mm_agent.py`'s `HumanReviewAgent`/`interrupt_after`, reusing the checkpointer already in §3.2) to surface the draft + reason for edit-or-approve; a false reading of `ambiguity`, or the flag being off, proceeds straight to freezing with zero human input. The prompt is explicit that this is a last resort, not a courtesy check: *"Only pause if you genuinely cannot derive checkable acceptance criteria from the goal, or a reasonable second reading of the goal would produce materially different scenarios. Do not pause to confirm something you can reasonably infer — the agent is expected to act autonomously; treat interruption as an exception, not a step."* This keeps the escape hatch cheap without turning it into a routine gate — the report's "stay the engineer" principle applied narrowly, at the one point where getting the frozen goal wrong is unrecoverable later.
+
 **plan_tot** — Tree-of-Thought (Yao et al. 2023), sized for a local Ollama model:
-- *Propose*: one call at temperature ≈0.8 generates **k=3** distinct plans (structured output).
-- *Evaluate*: separate judge call at temperature 0 scores each on goal-fit, simplicity, risk, testability.
+- *Propose*: one `primary`-role call at temperature ≈0.8 generates **k=3** distinct plans (structured output).
+- *Evaluate*: separate `secondary`-role judge call at temperature 0 scores each on goal-fit, simplicity, risk, testability — same maker/checker principle applied to planning: the model that proposed a plan shouldn't be the one scoring it, when a distinct secondary model is configured (§3.5). Falls back to the same model transparently otherwise.
 - *Select*: highest-scoring plan not marked `exhausted` becomes active. Rejected branches are kept in state — they're re-scored, not regenerated, on re-entry.
 - On re-entry after a plan dies, the prompt includes the **aggregated lessons** (see diagnose) — this is the GoT step: insights from multiple failed branches merge into the next choice, which pure tree search can't do (Besta et al. 2023).
 - Deliberately *not* parallel beam execution: sequential fallback keeps token cost sane on local models. Branching lives in planning, not in execution.
@@ -141,7 +145,7 @@ Checkpointer: `SqliteSaver` (file-backed, not `:memory:` — resumability is the
 
 **diagnose** — LLM classifies the failure (syntax | test-logic | env | flake | design), computes the `failure_signature` (recipe in §3.4), and appends a one-line `Lesson`. Routing is pure code, no LLM: run the §3.4 hard-exit checks in order; else retry **code** while attempts remain on the plan; else next plan via **plan_tot**. A `flake` classification gets one free retry without burning an attempt. Diagnose entry (and review entry) also checks the **stop flag** — see §4.
 
-**review (checker)** — adversarial sub-agent, separate prompt ("assume the maker is wrong; find where the diff satisfies the letter of the tests but not the spec"), temperature 0, model from `CHECKER_MODEL` env var (defaults to `OLLAMA_MODEL`; a different model is better when available). Sees **spec + diff + step definitions + test output** — not the maker's reasoning, to avoid contamination. Specifically audits step defs for trivial-pass hacks (its job since the maker wrote them under frozen `.feature` files). Output is structured, never prose:
+**review (checker)** — adversarial sub-agent, separate prompt ("assume the maker is wrong; find where the diff satisfies the letter of the tests but not the spec"), temperature 0, always the `secondary` role (§3.5) — a different model catches more than a different prompt on the same model, and this is the node where that matters most. Sees **spec + diff + step definitions + test output** — not the maker's reasoning, to avoid contamination. Specifically audits step defs for trivial-pass hacks (its job since the maker wrote them under frozen `.feature` files). Output is structured, never prose:
 
 ```python
 class Finding(TypedDict):
@@ -184,7 +188,26 @@ Reviewer rejections are signed too: `(review, finding.location, severity)` per b
 3. Reviewer rejects twice with the same signature → escalate (the checker isn't fixing the maker; iterating won't either).
 4. Any budget breached (attempts, wall clock, tokens) → escalate. Token budget is a **hard stop** at this checkpoint, not a warning.
 
-### 3.5 Where ToT/GoT apply — and where they don't
+### 3.5 Model configuration — primary / secondary, provider-agnostic
+
+Two roles, not two hardcoded models:
+
+- **`primary`** — intake, author_bdd, plan_tot propose, code/maker, diagnose. The high-frequency, in-the-loop calls.
+- **`secondary`** — plan_tot judge, review/checker. The independent-judgement calls, deliberately capable of being a *different* model.
+
+```
+CODING_AGENT_PRIMARY_PROVIDER=ollama
+CODING_AGENT_PRIMARY_MODEL=${OLLAMA_MODEL}
+CODING_AGENT_PRIMARY_BASE_URL=${OLLAMA_BASE_URL}
+
+CODING_AGENT_SECONDARY_PROVIDER=ollama        # defaults to PRIMARY_PROVIDER if unset
+CODING_AGENT_SECONDARY_MODEL=${OLLAMA_MODEL}  # point at a different model (or provider) to sharpen the checker
+CODING_AGENT_SECONDARY_BASE_URL=${OLLAMA_BASE_URL}
+```
+
+`coding_agent/models.py` exposes one seam, `get_llm(role: Literal["primary", "secondary"]) -> BaseChatModel`, and every node goes through it — no node ever constructs a `ChatOllama` inline. Today the provider switch has one branch (`ollama`, mirroring `app.py`'s existing `get_llm()`); the switch statement is what makes adding `openai`/`anthropic` later a few lines in one file rather than touching every prompt call site. If `secondary` isn't configured, or resolves to the same provider+model as `primary`, judge/review calls still run — same maker/checker discipline, just without the model-diversity benefit — so the loop degrades gracefully rather than requiring a second model to function.
+
+### 3.6 Where ToT/GoT apply — and where they don't
 
 | Phase | Technique | Why |
 |---|---|---|
@@ -201,7 +224,7 @@ Reviewer rejections are signed too: `(review, finding.location, severity)` per b
 | Rail | Implementation |
 |---|---|
 | Filesystem jail | Every mutating op (write, patch, **delete, move/rename**) funnels through one guard: `os.path.realpath` on both source and destination (symlink-proof, incl. Windows), `is_relative_to(worktree_dir)` check, then frozen-set check (feature files, `.git` internals). Violations are **surfaced to the maker as tool errors, never silently swallowed** — the error text is learning signal, and silent blocks hide bugs. |
-| Command allowlist | Binaries: `pytest`, `ruff`, `python`. `git` narrowed to a **subcommand allowlist** (`status`, `diff`, `add`, `commit`, `log`, `rev-parse`); `-c`, `--exec*`, `--upload-pack`, hooks-path and editor flags rejected outright. No `pip install` unless `CODING_ENGINEER_ALLOW_INSTALL=true`. |
+| Command allowlist | Binaries: `pytest`, `ruff`, `python`. `git` narrowed to a **subcommand allowlist** (`status`, `diff`, `add`, `commit`, `log`, `rev-parse`); `-c`, `--exec*`, `--upload-pack`, hooks-path and editor flags rejected outright. No `pip install` unless `CODING_AGENT_ALLOW_INSTALL=true`. |
 | Subprocess hygiene | `cwd=worktree_dir` always — never inherited. Sanitised env (minimal `PATH`, `GIT_*` stripped). `subprocess.run(args_list, timeout=...)` — list args, no shell, Windows-safe. |
 | Stop rules | attempts caps, §3.4 hard exits, `recursion_limit≈150`, wall-clock check in diagnose, token tally via `telemetry.extract_token_usage`. |
 | Kill switch | UI Stop button writes a **stop flag** (`.loop/state/coding-engineer/<run_id>/STOP`); diagnose and review entry check it — every attempt passes through one of the two, so worst-case halt latency is one attempt, bounded by `cmd_timeout_s`. Flag → escalate("stopped by user"); run can resume by `run_id` or be abandoned cleanly. (Deliberately *not* `interrupt_after` on every attempt — that pauses unconditionally and demands a resume each cycle, which is a HITL gate, not a kill switch. The interrupt pattern is reserved for optional scenario approval, §8 Q1.) |
@@ -211,31 +234,39 @@ Reviewer rejections are signed too: `(review, finding.location, severity)` per b
 
 ## 5. Repo changes (when implemented)
 
+All new code is isolated under one package, `coding_agent/` — it doesn't spread into the existing top-level modules, and it doesn't collide with the existing `tools/` package (`mcp_notes.py`, `rag.py`), which stays untouched:
+
 ```
 langgraph_ollama/
-├── coding_engineer.py        # NEW — graph, state, nodes (CodingEngineer class, .create_graph())
-├── coding_prompts.py         # NEW — intake/planner/judge/maker/diagnose/reviewer prompts
-├── tools/
-│   ├── code_exec.py          # NEW — jailed file tools + allowlisted run_command
-│   └── worktree.py           # NEW — worktree create/cleanup, diff, commit helpers
-├── sample_target/            # NEW — tiny demo repo (kata + failing feature file) for demos/tests
-├── tests/                    # NEW — unit tests for jail, runner, signatures, routing
-├── app.py                    # MODIFIED — see below
-└── pyproject.toml            # MODIFIED — add: pytest, pytest-bdd, pytest-json-report, ruff
+├── coding_agent/
+│   ├── __init__.py
+│   ├── engine.py              # NEW — graph, state, nodes (CodingEngineer class, .create_graph())
+│   ├── prompts.py             # NEW — intake/planner/judge/maker/diagnose/reviewer prompts
+│   ├── models.py              # NEW — primary/secondary model config, provider seam (§3.5)
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   ├── code_exec.py       # NEW — jailed file tools + allowlisted run_command
+│   │   └── worktree.py        # NEW — worktree create/cleanup, diff, commit helpers
+│   ├── sample_target/         # NEW — tiny demo repo (kata + failing feature file) for demos/tests
+│   └── tests/                 # NEW — unit tests for jail, runner, signatures, routing
+├── app.py                     # MODIFIED — see below
+└── pyproject.toml             # MODIFIED — add: pytest, pytest-bdd, pytest-json-report, ruff
 ```
+
+Runtime state (`.loop/state/coding-engineer/...`) stays at the repo root, alongside the existing `.cache/` — it's generated state, not code, so it doesn't move under `coding_agent/`.
 
 BDD runner choice: **pytest-bdd** over behave — one test runner for both gates, plays with `pytest --json-report`, one dependency family.
 
 ### app.py integration (minimal diff)
 
-- `CODING_ENGINEER = "Coding Engineer"`; `CHAIN_CONFIG` entry with `models: [os.getenv('OLLAMA_MODEL')]`, `support_types: []`.
-- `build_chain` branch → `CodingEngineer(llm).create_graph()` (graph display works as-is).
-- When selected: inputs for target dir (default `sample_target/`), goal textarea (reuses existing query box), budgets expander in the sidebar.
+- `from coding_agent.engine import CodingEngineer`; `CODING_ENGINEER = "Coding Engineer"`; `CHAIN_CONFIG` entry with `models: [os.getenv('OLLAMA_MODEL')]`, `support_types: []`.
+- `build_chain` branch → `CodingEngineer().create_graph()` — model selection happens inside via `coding_agent.models.get_llm()` (§3.5), not the `get_llm(model_selection)` helper in `app.py` (graph display works as-is).
+- When selected: inputs for target dir (default `coding_agent/sample_target/`), goal textarea (reuses existing query box), budgets expander in the sidebar.
 - Run via `graph.stream(state, config, stream_mode="updates")` inside `st.status` — per-node progress line (node name, attempt, gate results), matching the Internet Researcher streaming pattern. Wrap in `telemetry.track_request(CODING_ENGINEER, model)`; `record_tokens` per node update.
 - On finish: verdict banner, diff viewer (`st.code`), link to `run-report.md`, branch name to review.
-- `DEMO_QUERIES[CODING_ENGINEER]`, e.g. *"In sample_target, implement the string-calculator kata so all scenarios in features/calculator.feature pass."*
+- `DEMO_QUERIES[CODING_ENGINEER]`, e.g. *"In coding_agent/sample_target, implement the string-calculator kata so all scenarios in features/calculator.feature pass."*
 
-Env additions (`.env.example`): `CHECKER_MODEL` (optional), `CODING_ENGINEER_ALLOW_INSTALL=false`.
+Env additions (`.env.example`): `CODING_AGENT_PRIMARY_MODEL`/`_PROVIDER`/`_BASE_URL`, `CODING_AGENT_SECONDARY_MODEL`/`_PROVIDER`/`_BASE_URL` (all optional, default to `OLLAMA_MODEL`/`OLLAMA_BASE_URL`/`ollama`), `CODING_AGENT_HITL_BDD_APPROVAL=false`, `CODING_AGENT_ALLOW_INSTALL=false`.
 
 ---
 
@@ -243,10 +274,10 @@ Env additions (`.env.example`): `CHECKER_MODEL` (optional), `CODING_ENGINEER_ALL
 
 | Phase | Scope | Acceptance criteria |
 |---|---|---|
-| **0 — Scaffolding** | `tools/code_exec.py`, `tools/worktree.py`, `sample_target/`, deps | Unit tests prove: jail blocks escapes + frozen writes; runner enforces timeout; worktree create/cleanup round-trips on Windows. |
-| **1 — Linear loop** | intake → author_bdd → single fixed plan → code → self_check → bdd_gate → finalize | Solves the sample kata unattended from the CLI (`python coding_engineer.py`), ≤3 attempts, branch + report produced. |
-| **2 — Rails & memory** | diagnose, §3.4 signatures + hard exits, budgets, escalate, disk state, resume, stop flag | Impossible goal escalates within budget; identical failure twice → plan exhausted; two exhausted plans → escalate; Stop button halts at next attempt boundary; killed run resumes from checkpoint. |
-| **3 — ToT / GoT / checker** | plan_tot (k=3 + judge), lesson aggregation, adversarial review, `CHECKER_MODEL` | Seeded bad plan → observable plan switch with lessons in report; seeded trivial-pass step def → reviewer rejects. |
+| **0 — Scaffolding** | `coding_agent/tools/code_exec.py`, `coding_agent/tools/worktree.py`, `coding_agent/models.py`, `coding_agent/sample_target/`, deps | Unit tests prove: jail blocks escapes + frozen writes; runner enforces timeout; worktree create/cleanup round-trips on Windows; `get_llm("primary"/"secondary")` resolves correctly with and without secondary env vars set. |
+| **1 — Linear loop** | intake → author_bdd (HITL flag off) → single fixed plan → code → self_check → bdd_gate → finalize | Solves the sample kata unattended from the CLI (`python -m coding_agent.engine`), zero human input, ≤3 attempts, branch + report produced. |
+| **2 — Rails & memory** | diagnose, §3.4 signatures + hard exits, budgets, escalate, disk state, resume, stop flag, author_bdd interrupt (HITL flag on) | Impossible goal escalates within budget; identical failure twice → plan exhausted; two exhausted plans → escalate; Stop button halts at next attempt boundary; killed run resumes from checkpoint; with HITL on, a deliberately ambiguous goal pauses for approval and a clear goal does not. |
+| **3 — ToT / GoT / checker** | plan_tot (k=3 + judge on `secondary`), lesson aggregation, adversarial review on `secondary` | Seeded bad plan → observable plan switch with lessons in report; seeded trivial-pass step def → reviewer rejects; run with a distinct `CODING_AGENT_SECONDARY_MODEL` demonstrably uses it for judge + review calls (visible in telemetry spans). |
 | **4 — UI & polish** | app.py integration, streaming, telemetry, demo queries, README | End-to-end demo from Streamlit; graph diagram renders; tokens/latency visible in observability stack. |
 
 Each phase is independently shippable; Phase 1 alone is already a working (if naive) non-stop agent.
@@ -267,12 +298,14 @@ Repo-specific risks only — the generic loop failure modes (token runaway, cont
 
 ---
 
-## 8. Open questions (for review before Phase 0)
+## 8. Open questions — resolved
 
-1. Should author_bdd offer an **optional** HITL pause to approve scenarios before the loop goes non-stop (Article-Writer-style `interrupt`, default off)? Cheap insurance that the frozen goal matches intent.
-2. Is a second local model available for `CHECKER_MODEL`? Maker/checker on the same model still helps (different prompt/temperature) but a different model catches more.
+All four have been folded into the design above; kept here as a decision log.
 
-Resolved in-text: v1 targets are **Python-only** (gates are pytest/ruff; other stacks become pluggable gate commands later), and the token budget is a **hard stop** at the §3.4 checkpoint, not a warning.
+1. **HITL pause in author_bdd?** Yes, optional and default off (`CODING_AGENT_HITL_BDD_APPROVAL`) — see §3.3. The node self-assesses ambiguity and only interrupts when it judges the frozen goal could plausibly diverge from intent; the prompt explicitly frames interruption as a last resort so it doesn't erode the agent's autonomy by default.
+2. **Second model for the checker role?** Made general rather than answered once: `primary`/`secondary` are configurable independently (§3.5), provider-agnostic from day one so a future move off Ollama is a config change, not a rewrite. Secondary defaults to primary if unset — the loop works with one model, sharpens with two.
+3. v1 targets are **Python-only** (gates are pytest/ruff; other stacks become pluggable gate commands later).
+4. Token budget is a **hard stop** at the §3.4 checkpoint, not a warning.
 
 ---
 
