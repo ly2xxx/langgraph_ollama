@@ -195,6 +195,41 @@ also help catch this, but doesn't exist yet.
 
 ---
 
+## Phase 1 follow-up — minimal app.py entry point ✅
+
+Prompted by the same POC: there was no way to run the agent except the CLI
+(`python -m coding_agent.engine`). Added a lightweight Streamlit access
+point rather than waiting for full Phase 4 polish (§5's budgets expander,
+diff viewer, demo queries, telemetry wiring — none of that is here yet):
+
+- `ui/coding_engineer_panel.py` — `render_coding_engineer_panel()`: target-dir
+  text input, goal textarea, an "ambiguous scenarios pause" checkbox
+  (defaults on), a Run button, live per-node status via `st.status`, and the
+  run report rendered in an expander when done.
+- `app.py` — added `CODING_ENGINEER` to the assistant selectbox; selecting it
+  branches early (before the model-selection/`build_chain` machinery, which
+  doesn't apply here — `coding_agent.models` resolves its own primary/secondary
+  models from env vars) and renders the panel.
+- `coding_agent/engine.py` — refactored `run_cli`'s inline streaming loop into
+  a reusable `stream_run(run_id, target_dir, goal, hitl, budgets)` generator,
+  shared by the CLI and the new panel instead of duplicated. `_new_run_id`
+  was renamed to `new_run_id` (dropped the underscore — it's now a
+  cross-module public function, not engine.py-private).
+
+**Verified:** full `coding_agent` suite re-run after the `engine.py` refactor
+(42/42 still pass — confirms `run_cli`'s behavior is unchanged), `ruff`
+clean, both new/changed files syntax-checked, and `ui/coding_engineer_panel.py`
+confirmed to import cleanly with `streamlit` installed. **Not verified:** an
+actual browser click-through of the Run button — that needs either a live
+Ollama connection (unavailable in this sandbox) or mocking the LLM boundary
+functions from inside a running Streamlit session, which wasn't attempted.
+The underlying `stream_run` path it calls is the same one covered by all the
+engine integration tests, so the risk is concentrated in the UI glue code
+itself (event loop, `st.status` updates, report rendering) rather than the
+agent logic.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

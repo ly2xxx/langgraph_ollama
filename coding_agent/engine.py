@@ -644,16 +644,24 @@ class CodingEngineer:
 # ---------------------------------------------------------------------------
 
 
-def _new_run_id() -> str:
+def new_run_id() -> str:
     # Local time is fine here -- this is a human-readable, sortable id
     # component, not a timezone-sensitive value used in any comparison.
     return f"{datetime.now().strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"  # noqa: DTZ005
 
 
-def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None) -> str:
-    """Runs one goal to completion (or escalation) and returns the run_id."""
+def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None):
+    """Runs one goal to completion (or escalation) under the given run_id,
+    yielding the same per-step `{node_name: node_update}` dicts
+    `graph.stream(..., stream_mode="updates")` yields.
+
+    This is the shared core between the CLI driver (`run_cli`) and any UI
+    that wants live per-node progress -- see `ui/coding_engineer_panel.py`,
+    which streams these updates into a `st.status` box. Pulled out during
+    the app.py integration once it became clear the CLI's inline loop
+    would otherwise have to be duplicated for the UI.
+    """
     graph = CodingEngineer().create_graph()
-    run_id = _new_run_id()
     initial_state: CodingLoopState = {
         "run_id": run_id,
         "target_dir": str(Path(target_dir).resolve()),
@@ -662,10 +670,15 @@ def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None
         "budgets": budgets or {},
     }
     config = {"configurable": {"thread_id": run_id}, "recursion_limit": 150}
+    yield from graph.stream(initial_state, config=config, stream_mode="updates")
 
+
+def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None) -> str:
+    """Runs one goal to completion (or escalation) and returns the run_id."""
+    run_id = new_run_id()
     print(f"run_id={run_id}")
     final_status = None
-    for update in graph.stream(initial_state, config=config, stream_mode="updates"):
+    for update in stream_run(run_id, target_dir, goal, hitl=hitl, budgets=budgets):
         for node_name, node_update in update.items():
             if node_name == "__interrupt__":
                 print(f"[INTERRUPTED] {node_update}")

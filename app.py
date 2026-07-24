@@ -13,6 +13,7 @@ import asyncio
 import tempfile
 import os
 from ui.file_picker import render_file_picker
+from ui.coding_engineer_panel import render_coding_engineer_panel
 import urllib.parse
 from dotenv import load_dotenv
 import os
@@ -28,6 +29,7 @@ telemetry.init_telemetry()
 RAG_CHATBOT_AGENT = "RAG Chatbot Agent"
 ARTICLE_WRITER = "Article Writer"
 INTERNET_RESEARCHER = "Internet Researcher"
+CODING_ENGINEER = "Coding Engineer"
 
 load_dotenv()
 
@@ -126,8 +128,16 @@ def build_chain(chain_selection: str, model_selection: str):
 def main():
     st.title("Multi-agent Assistant Demo")
 
-    chain_selection = st.selectbox("Select assistant", [RAG_CHATBOT_AGENT, ARTICLE_WRITER, INTERNET_RESEARCHER])#[TRAVEL_AGENT, RESEARCH_AGENT, RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT, ARTICLE_WRITER])
-    
+    chain_selection = st.selectbox("Select assistant", [RAG_CHATBOT_AGENT, ARTICLE_WRITER, INTERNET_RESEARCHER, CODING_ENGINEER])#[TRAVEL_AGENT, RESEARCH_AGENT, RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT, ARTICLE_WRITER])
+
+    if chain_selection == CODING_ENGINEER:
+        # Different input shape entirely (target dir + goal, not a chat query)
+        # and doesn't use the model-selection/build_chain machinery below --
+        # coding_agent.models resolves its own primary/secondary models from
+        # env vars (CODING_ENGINEER.md §3.5). Render its panel and stop here.
+        render_coding_engineer_panel()
+        return
+
     # Clear chat history when switching away from RAG Chatbot Agent
     if "previous_agent" not in st.session_state:
         st.session_state.previous_agent = chain_selection
