@@ -257,33 +257,13 @@ def main():
 def displayGraph(chain, chain_selection):
     """Render the agent's graph topology.
 
-    draw_mermaid_png() calls the remote mermaid.ink service, so the PNG is
-    cached on disk keyed by the graph's mermaid source — reruns (and offline
-    demos) never repeat the network call. Falls back to showing the mermaid
-    source text if the image can't be produced at all.
+    Implementation moved to ui/graph_display.py so the Coding Engineer
+    panel can share it -- see render_graph_diagram there for the caching
+    details (mermaid.ink PNG cached on disk keyed by mermaid source).
     """
-    import hashlib
-    from pathlib import Path
+    from ui.graph_display import render_graph_diagram
 
-    graph = chain.get_graph(xray=True)
-    mermaid_src = graph.draw_mermaid()
-    cache_dir = Path(".cache/graph-png")
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    png_path = cache_dir / (hashlib.sha256(mermaid_src.encode()).hexdigest()[:16] + ".png")
-
-    if not png_path.exists():
-        try:
-            png_path.write_bytes(graph.draw_mermaid_png())
-        except Exception:
-            with st.expander(f"{chain_selection} — graph diagram (image service unreachable)"):
-                st.code(mermaid_src)
-            return
-
-    image = Image.open(BytesIO(png_path.read_bytes()))
-    new_height = 460  # Desired height in pixels
-    new_width = int(new_height * image.width / image.height)  # Maintain aspect ratio
-    new_image = image.resize((new_width, new_height))
-    st.image(new_image, caption=chain_selection)
+    render_graph_diagram(chain, chain_selection)
 
 # def displayGraph(chain, chain_selection):
 #     # Get the graph

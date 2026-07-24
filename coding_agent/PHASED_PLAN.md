@@ -230,6 +230,53 @@ agent logic.
 
 ---
 
+## Phase 1 follow-up — live-run fixes ✅
+
+The first live run (glm-5.2:cloud via Ollama, targeting the RAG-chatbot
+refactor POC) failed in `intake` with an `OutputParserException` that
+crashed the whole graph and surfaced as a raw stack trace in the UI. The
+model's *content* was excellent — a well-formed spec with sensible
+acceptance criteria — but it answered in markdown, and the default
+`with_structured_output` (tool-calling based) parser choked. This was
+precisely the §7 "local-model structured-output brittleness" risk, whose
+promised mitigation ("one retry with the error fed back") Phase 1 had
+documented but not actually implemented. Fixes:
+
+1. **`coding_agent/structured.py` — `invoke_structured()`.** Three layers:
+   (a) prefer `method="json_schema"`, which langchain-ollama routes through
+   Ollama's native `format` parameter so decoding is *constrained* to
+   schema-valid JSON — the model can't produce markdown even if inclined
+   (verified available on langchain-ollama 0.3.x, the pinned range);
+   (b) fall back to the default tool-calling method if json_schema isn't
+   supported; (c) within each method, one retry with the parse error fed
+   back plus an explicit "ONLY valid JSON" instruction. Exhaustion raises
+   `StructuredOutputError`. Both LLM structured-output call sites
+   (`_llm_parse_target_spec`, `_llm_author_bdd`) now go through it.
+2. **Graceful escalation instead of a crash.** `intake` and `author_bdd`
+   catch `StructuredOutputError` and route to `escalate` — run report
+   written, reason recorded, UI shows a finished-with-escalation run
+   instead of a traceback. `author_bdd → plan_tot` had to become a
+   conditional edge for this (it was a plain edge; an escalated status
+   would previously have marched straight on into planning).
+3. **Pipeline visualization in the panel** (user request, matching the other
+   agents): `displayGraph`'s body moved from `app.py` to a shared
+   `ui/graph_display.py :: render_graph_diagram()` (same mermaid.ink
+   PNG-with-disk-cache behaviour; `app.py`'s `displayGraph` now delegates
+   to it), and the Coding Engineer panel renders the graph topology above
+   its inputs via an `st.cache_resource`-cached uncheckpointed
+   `build_graph()` instance — same pattern as `app.py`'s `build_chain`.
+
+**Verified:** 48/48 tests pass — 5 new unit tests for `invoke_structured`
+(method fallback, retry-with-error-fed-back, None-result retry, exhaustion)
+using a scripted fake LLM, plus 1 new integration test proving an intake
+parse failure now ends in a graceful escalation with a report. Ruff clean.
+Panel/graph_display import-checked with streamlit installed. **Still not
+verified:** a live browser round-trip (sandbox has no Ollama) — but the
+failing path from the user's screenshot is now covered by tests at both
+the unit and graph level.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

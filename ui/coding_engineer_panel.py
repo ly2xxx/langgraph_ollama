@@ -12,7 +12,17 @@ from pathlib import Path
 
 import streamlit as st
 
-from coding_agent.engine import _loop_state_dir, new_run_id, stream_run
+from coding_agent.engine import _loop_state_dir, build_graph, new_run_id, stream_run
+from ui.graph_display import render_graph_diagram
+
+
+@st.cache_resource(show_spinner="Building agent graph...")
+def _topology_graph():
+    """Uncheckpointed graph instance used only for the topology picture --
+    same pattern as app.py's build_chain cache. The actual runs go through
+    stream_run -> CodingEngineer().create_graph(), which owns the real
+    SqliteSaver-backed instance."""
+    return build_graph()
 
 DEFAULT_TARGET = "."
 DEFAULT_GOAL = (
@@ -28,6 +38,8 @@ def render_coding_engineer_panel() -> None:
         "until you review and merge the branch yourself. See coding_agent/CODING_ENGINEER.md "
         "for how the loop works."
     )
+
+    render_graph_diagram(_topology_graph(), "Coding Engineer")
 
     target_dir = st.text_input(
         "Target directory (a git repo, or a path inside one)",

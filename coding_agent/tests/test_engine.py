@@ -227,6 +227,29 @@ def test_unsuitable_goal_escalates_without_worktree(kata_target, monkeypatch):
     assert "unsuitable goal" in report_text
 
 
+# -- structured-output failure escalates gracefully (live-run fix) -----------
+
+
+def test_intake_structured_failure_escalates_with_report(kata_target, monkeypatch):
+    """The first live run crashed the whole graph (and surfaced a raw stack
+    trace in the UI) when intake's structured output couldn't be parsed.
+    Now it must escalate gracefully with a report instead."""
+    from coding_agent.structured import StructuredOutputError
+
+    def fake_parse(llm, goal, target_dir):
+        raise StructuredOutputError("model answered in markdown, all retries failed")
+
+    monkeypatch.setattr("coding_agent.engine._llm_parse_target_spec", fake_parse)
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-parsefail-1")
+
+    assert final["status"] == "escalated"
+    assert "intake structured-output failure" in final["escalation_reason"]
+    report_text = _report_path("run-parsefail-1").read_text()
+    assert "Outcome:** escalated" in report_text
+    assert "structured-output failure" in report_text
+
+
 # -- stop flag ---------------------------------------------------------------
 
 

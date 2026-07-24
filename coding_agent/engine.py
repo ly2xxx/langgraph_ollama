@@ -44,6 +44,7 @@ from coding_agent.models import get_llm
 from coding_agent.prompts import AUTHOR_BDD_PROMPT, INTAKE_PROMPT, MAKER_SYSTEM_PROMPT
 from coding_agent.report import stop_flag_set, write_run_report
 from coding_agent.schemas import BddAuthorResult, TargetSpec
+from coding_agent.structured import StructuredOutputError, invoke_structured
 from coding_agent.tools.code_exec import Jail, JailViolation, run_command
 from coding_agent.tools.worktree import WorktreeHandle, create_worktree
 from coding_agent.tools.worktree import commit as worktree_commit
@@ -186,19 +187,17 @@ def _summarize_failure(state: CodingLoopState) -> str:
 
 
 def _llm_parse_target_spec(llm, goal: str, target_dir: str) -> TargetSpec:
-    structured = llm.with_structured_output(TargetSpec)
     prompt = INTAKE_PROMPT.format(goal=goal, target_dir=target_dir)
-    return structured.invoke(prompt)
+    return invoke_structured(llm, TargetSpec, prompt)
 
 
 def _llm_author_bdd(llm, state: CodingLoopState) -> BddAuthorResult:
-    structured = llm.with_structured_output(BddAuthorResult)
     criteria = (state.get("spec") or {}).get("acceptance_criteria", [])
     prompt = AUTHOR_BDD_PROMPT.format(
         goal=state["goal"],
         acceptance_criteria="\n".join(f"- {c}" for c in criteria) or "(none extracted)",
     )
-    return structured.invoke(prompt)
+    return invoke_structured(llm, BddAuthorResult, prompt)
 
 
 def _build_maker_tools(jail: Jail, budgets: Budgets) -> list:
@@ -309,7 +308,19 @@ def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
 def intake_node(state: CodingLoopState) -> dict:
     budgets = {**DEFAULT_BUDGETS, **(state.get("budgets") or {})}
     llm = get_llm("primary")
-    spec = _llm_parse_target_spec(llm, state["goal"], state["target_dir"])
+    try:
+        spec = _llm_parse_target_spec(llm, state["goal"], state["target_dir"])
+    except StructuredOutputError as exc:
+        # Escalate gracefully (with a report) instead of letting the raw
+        # exception blow up the graph -- the first live run surfaced exactly
+        # this as an unhandled stack trace in the UI. See structured.py.
+        return {
+            "budgets": budgets,
+            "run_started_at": time.time(),
+            "status": "escalated",
+            "escalation_reason": f"intake structured-output failure: {exc}",
+            "messages": [_status_message("intake", False, note=str(exc)[:200])],
+        }
 
     if not spec.is_suitable:
         return {
@@ -345,6 +356,10 @@ def _route_after_intake(state: CodingLoopState) -> str:
     return "escalate" if state.get("status") == "escalated" else "author_bdd"
 
 
+def _route_after_author_bdd(state: CodingLoopState) -> str:
+    return "escalate" if state.get("status") == "escalated" else "plan_tot"
+
+
 def author_bdd_node(state: CodingLoopState) -> dict:
     worktree_dir = Path(state["worktree_dir"])
     existing = sorted(
@@ -363,7 +378,14 @@ def author_bdd_node(state: CodingLoopState) -> dict:
         }
 
     llm = get_llm("primary", temperature=0.3)
-    result = _llm_author_bdd(llm, state)
+    try:
+        result = _llm_author_bdd(llm, state)
+    except StructuredOutputError as exc:
+        return {
+            "status": "escalated",
+            "escalation_reason": f"author_bdd structured-output failure: {exc}",
+            "messages": [_status_message("author_bdd", False, note=str(exc)[:200])],
+        }
 
     if state.get("hitl_bdd_approval") and result.ambiguity:
         payload = interrupt(
@@ -614,7 +636,9 @@ def build_graph(checkpointer=None):
 
     graph.set_entry_point("intake")
     graph.add_conditional_edges("intake", _route_after_intake, {"author_bdd": "author_bdd", "escalate": "escalate"})
-    graph.add_edge("author_bdd", "plan_tot")
+    graph.add_conditional_edges(
+        "author_bdd", _route_after_author_bdd, {"plan_tot": "plan_tot", "escalate": "escalate"}
+    )
     graph.add_edge("plan_tot", "code")
     graph.add_edge("code", "self_check")
     graph.add_conditional_edges("self_check", _route_after_self_check, {"bdd_gate": "bdd_gate", "diagnose": "diagnose"})
