@@ -145,6 +145,56 @@ lands, to sanity-check the actual prompts.
 
 ---
 
+## Phase 1 follow-up — self-hosting fixes ✅
+
+Prompted by a real target: refactoring `rag_research_chatbot.py` into a
+subfolder within this same repo, as a POC. Two Phase 1 scope-trims turned
+out to matter for that specific shape of task, plus one hygiene gap they
+exposed. None of these needed Phase 2/3 sophistication — they're small,
+targeted fixes to Phase 1 code.
+
+1. **Maker can now delete and move files.** `_build_maker_tools` exposes
+   `delete_file`/`move_file` (wrapping `Jail` methods that already existed
+   and were already unit-tested from Phase 0) alongside `write_file`.
+   Without this, a "move" would leave the old file behind as a stray
+   duplicate — `write_file` alone never removes anything. `MAKER_SYSTEM_PROMPT`
+   was updated to say so explicitly, including that the maker should update
+   *other* files that reference what it moved (e.g. an import), not just the
+   file named in the goal.
+2. **self_check/bdd_gate exclude `coding_agent/` when present in the target.**
+   New `_harness_exclude_dirs()` helper: if the worktree contains a
+   `coding_agent` directory (true only when self-hosting — pointing the
+   agent at its own repo), it's excluded from both ruff's and pytest's scope
+   in both gates. Without this, any goal run against this repo would also
+   execute the agent's own ~40-test suite as a side effect, which is slow
+   and has nothing to do with whatever the actual goal is.
+3. **`.loop/` added to `.gitignore`.** Self-hosting means the loop's own
+   runtime state (worktrees, sqlite checkpoints, run reports) lands inside
+   the same repo it's operating on; without a gitignore entry, `.loop/`
+   would show up as untracked clutter in `git status` and risk being swept
+   into a human's own `git add -A`.
+
+**Verified:** a new integration test (`test_maker_can_move_a_module_and_fix_the_import`)
+runs the exact shape of the POC through the full graph — mocked maker
+relocates `calculator.py` into `sub/`, fixes the one file that imports it
+(the pytest-bdd step defs — not frozen, since only the `.feature` file is
+per §3.3/§4), and deletes the original — and asserts the run finishes
+`done` with a diff showing a clean removal-plus-addition, not a duplicate.
+A second test confirms a nested `coding_agent/tests/` with an intentionally
+failing test doesn't affect `self_check`'s outcome. 42/42 tests pass overall.
+
+**Still true regardless of these fixes:** `rag_research_chatbot.py` and
+`app.py` have no existing test coverage, so the BDD scenarios `author_bdd`
+drafts are the *only* safety net catching a broken cross-file import — nothing
+else would notice if, say, `app.py`'s import of `RAGResearchChatbot` silently
+broke. Worth either enabling `CODING_AGENT_HITL_BDD_APPROVAL=true` for this
+specific run to review the drafted scenarios before they freeze, or writing
+one BDD scenario by hand up front (e.g. "importing app and constructing
+RAGResearchChatbot does not raise"). A Phase 3 adversarial reviewer would
+also help catch this, but doesn't exist yet.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

@@ -17,8 +17,9 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent.engine import CodingEngineer, build_graph
+from coding_agent.engine import CodingEngineer, _build_maker_tools, build_graph
 from coding_agent.schemas import TargetSpec
+from coding_agent.tools.code_exec import Jail
 
 SAMPLE_TARGET = Path(__file__).resolve().parents[1] / "sample_target"
 
@@ -248,3 +249,92 @@ def test_stop_flag_halts_at_next_diagnose(kata_target, monkeypatch):
 
     assert final["status"] == "escalated"
     assert final["escalation_reason"] == "stopped by user"
+
+
+# -- maker tool surface: delete_file / move_file (Phase 1 follow-up) --------
+
+
+def test_maker_tools_include_delete_and_move(tmp_path):
+    root = tmp_path / "worktree"
+    root.mkdir()
+    (root / "features").mkdir()
+    (root / "features" / "x.feature").write_text("Feature: stub\n")
+    jail = Jail(root=root, frozen=frozenset({Path("features/x.feature")}))
+    tools = _build_maker_tools(jail, {"cmd_timeout_s": 5})
+    names = {t.name for t in tools}
+
+    assert {"read_file", "list_dir", "write_file", "delete_file", "move_file", "run_pytest"} <= names
+
+    jail.write_file("scratch.txt", "hello")
+    delete_tool = next(t for t in tools if t.name == "delete_file")
+    move_tool = next(t for t in tools if t.name == "move_file")
+
+    jail.write_file("a.txt", "content")
+    result = move_tool.invoke({"src_path": "a.txt", "dst_path": "b.txt"})
+    assert "moved" in result
+    assert (root / "b.txt").read_text() == "content"
+    assert not (root / "a.txt").exists()
+
+    result = delete_tool.invoke({"path": "scratch.txt"})
+    assert "deleted" in result
+    assert not (root / "scratch.txt").exists()
+
+    # frozen feature file: both tools refuse, and say so instead of
+    # silently doing nothing (CODING_ENGINEER.md §4 Filesystem jail).
+    result = delete_tool.invoke({"path": "features/x.feature"})
+    assert result.startswith("ERROR")
+    assert "frozen" in result
+
+
+def test_maker_can_move_a_module_and_fix_the_import(kata_target, monkeypatch):
+    """The shape of the RAG-chatbot refactor POC: relocate a module into a
+    subfolder, update the one file that imports it, delete the original.
+    Proves delete_file/move_file are actually wired end-to-end through the
+    graph, not just unit-testable in isolation."""
+    _mock_suitable_intake(monkeypatch, acceptance_criteria=["calculator.py lives under sub/ and all scenarios still pass"])
+
+    def fake_run_maker(llm, jail, state):
+        jail.write_file("sub/calculator.py", CORRECT_CALCULATOR)
+        # Step defs aren't frozen (only the .feature file is -- see
+        # CODING_ENGINEER.md §3.3/§4), so fixing the import here is exactly
+        # the sanctioned "glue code" edit the maker is expected to make.
+        steps_path = "features/steps/test_calculator_steps.py"
+        original_steps = jail.read_file(steps_path)
+        fixed_steps = original_steps.replace(
+            'sys.path.insert(0, str(Path(__file__).resolve().parents[2]))\nfrom calculator import add',
+            'sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "sub"))\nfrom calculator import add',
+        )
+        assert fixed_steps != original_steps, "test fixture drifted from the replace() target"
+        jail.write_file(steps_path, fixed_steps)
+        jail.delete_file("calculator.py")
+        return {"output": "moved calculator.py to sub/, fixed the step-defs import"}
+
+    monkeypatch.setattr("coding_agent.engine._run_maker", fake_run_maker)
+
+    final = _invoke(kata_target, "Move calculator.py into a sub/ subfolder.", "run-move-1")
+
+    assert final["status"] == "done"
+    assert final["bdd_report"]["passed"] is True
+    assert "--- a/calculator.py" in final["last_diff"]  # old file removed
+    assert "+++ b/sub/calculator.py" in final["last_diff"]  # new file added
+
+
+# -- self_check / bdd_gate scope: never recurse into the agent's own harness --
+
+
+def test_self_check_excludes_nested_coding_agent_dir(kata_target, monkeypatch):
+    """If the target repo happens to contain a coding_agent/ directory (i.e.
+    someone points the agent at its own repo -- the self-hosting case this
+    fix was written for), self_check/bdd_gate must not run its ~40-test
+    suite as a side effect of an unrelated goal."""
+    nested = kata_target / "coding_agent" / "tests"
+    nested.mkdir(parents=True)
+    (nested / "test_always_fails.py").write_text("def test_boom():\n    assert False\n")
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-exclude-1")
+
+    assert final["status"] == "done"
+    assert final["test_report"]["passed"] is True

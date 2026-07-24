@@ -1,6 +1,11 @@
 .vs/
 # .vscode/
 .idea/
+
+# Coding Engineer agent runtime state (worktrees, checkpoints, run reports) --
+# see coding_agent/CODING_ENGINEER.md §4. Never commit this: it can contain
+# a live sqlite checkpoint DB and per-run worktree checkouts.
+.loop/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

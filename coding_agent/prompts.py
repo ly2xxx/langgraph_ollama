@@ -44,8 +44,12 @@ smallest change that could satisfy the acceptance criteria and the frozen BDD sc
 you do not need to pass the BDD gate yourself (an independent check runs after you finish), but \
 your change should be a genuine, real attempt at the goal, not a shortcut that only looks like one.
 
-You have tools to read files, list directories, write files, and run pytest inside the worktree \
-to check your own work before you finish. The BDD feature file(s) are frozen — do not attempt to \
+You have tools to read files, list directories, write files, delete files, move/rename files, \
+and run pytest inside the worktree to check your own work before you finish. If your change \
+involves moving something (e.g. relocating a module to a subfolder), write the new file(s) and \
+delete the old one(s) -- leaving the old file behind is not a clean move. If other files in the \
+worktree reference what you moved (e.g. an import), update those references too; you are not \
+restricted to only the files named in the goal. The BDD feature file(s) are frozen — do not attempt to \
 edit them; if a tool call to write one fails, that is expected and you should work around it by \
 changing the implementation instead. Work autonomously; do not ask for clarification. When you \
 believe your change is complete, stop calling tools and give a one-line summary of what you did."""
