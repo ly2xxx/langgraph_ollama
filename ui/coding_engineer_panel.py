@@ -186,7 +186,7 @@ def render_coding_engineer_panel() -> None:
         status_box = st.status("Starting run...", expanded=True)
         final_status = None
         try:
-            with telemetry.track_request(CODING_ENGINEER_LABEL, primary_model):
+            with telemetry.track_request(CODING_ENGINEER_LABEL, primary_model, run_id=run_id):
                 for update in stream_run(run_id, target_dir, goal, hitl=hitl, budgets=budgets):
                     for node_name, node_update in update.items():
                         if node_name == "__interrupt__":

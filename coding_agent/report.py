@@ -11,9 +11,12 @@ diff, then decides whether to merge. See CODING_ENGINEER.md §3.3 (finalize
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _run_dir(state: dict[str, Any], loop_state_dir: Path) -> Path:
@@ -165,8 +168,17 @@ def render_report(state: dict[str, Any], outcome: str, commit_rev: str) -> str:
 def write_run_report(state: dict[str, Any], loop_state_dir: Path, outcome: str, commit_rev: str = "") -> Path:
     run_dir = _run_dir(state, loop_state_dir)
 
+    report_content = render_report(state, outcome, commit_rev)
     report_path = run_dir / "run-report.md"
-    report_path.write_text(render_report(state, outcome, commit_rev), encoding="utf-8")
+    report_path.write_text(report_content, encoding="utf-8")
+
+    logger.info(
+        "Coding Engineer run report — %s (outcome=%s, branch=%s):\n%s",
+        state.get("run_id", "?"),
+        outcome,
+        state.get("branch", "?"),
+        report_content,
+    )
 
     snapshot = dict(state)
     snapshot.pop("messages", None)  # LangChain message objects aren't trivially JSON-serialisable

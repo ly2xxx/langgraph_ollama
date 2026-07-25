@@ -41,6 +41,7 @@ from langgraph.graph.message import add_messages
 from langgraph.types import interrupt
 
 from coding_agent.models import describe_all, get_llm
+import telemetry
 from coding_agent.prompts import (
     AUTHOR_BDD_PROMPT,
     DIAGNOSE_PROMPT,
@@ -1307,20 +1308,23 @@ def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False, budg
 
 def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None) -> str:
     """Runs one goal to completion (or escalation) and returns the run_id."""
+    telemetry.init_telemetry()
     run_id = new_run_id()
     print(f"run_id={run_id}")
     models = describe_all()
     print(f"primary model: {models['primary']}")
     print(f"secondary model: {models['secondary']}")
+    primary_model = (models.get("primary") or {}).get("model") or "unknown"
     final_status = None
-    for update in stream_run(run_id, target_dir, goal, hitl=hitl, budgets=budgets):
-        for node_name, node_update in update.items():
-            if node_name == "__interrupt__":
-                print(f"[INTERRUPTED] {node_update}")
-                continue
-            status = node_update.get("status") if isinstance(node_update, dict) else None
-            print(f"[{node_name}] status={status}")
-            final_status = status or final_status
+    with telemetry.track_request("Coding Engineer CLI", primary_model, run_id=run_id):
+        for update in stream_run(run_id, target_dir, goal, hitl=hitl, budgets=budgets):
+            for node_name, node_update in update.items():
+                if node_name == "__interrupt__":
+                    print(f"[INTERRUPTED] {node_update}")
+                    continue
+                status = node_update.get("status") if isinstance(node_update, dict) else None
+                print(f"[{node_name}] status={status}")
+                final_status = status or final_status
 
     report_path = _loop_state_dir() / "state" / "coding-engineer" / run_id / "run-report.md"
     print(f"final status: {final_status}")
