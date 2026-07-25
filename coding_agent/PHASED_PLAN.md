@@ -314,6 +314,77 @@ changed or could independently verify without a live browser session.
 
 ---
 
+## Phase 1 follow-up — third live-run bug: wrong BDD scenario frozen, plus scope/budget fixes ✅
+
+The third live run (the actual rag-chatbot-refactor POC) got all the way to
+`code`, but escalated after 4 identical `self_check` failures. The pasted
+run report and progress log surfaced four separate problems, of decreasing
+severity:
+
+1. **`author_bdd` froze the wrong feature file — the most serious bug.**
+   The run report's "Frozen BDD scenarios" field showed
+   `coding_agent/sample_target/features/calculator.feature` — this repo's
+   own Phase 0 demo fixture — adopted as the definition of done for an
+   unrelated goal (moving `rag_research_chatbot.py`). Root cause: the
+   self-hosting fixes two rounds ago added `_harness_exclude_dirs()`
+   (excluding `coding_agent/`) to `self_check_node` and `bdd_gate_node`, but
+   `author_bdd_node`'s own `rglob("*.feature")` scan was never given the same
+   exclusion — an oversight, not a new problem. Since this repo genuinely is
+   `coding_agent`'s own target when self-hosting, the unscoped scan always
+   found the kata fixture first and adopted it, silently substituting a
+   frozen goal the maker could never satisfy for the real one. **Fixed:**
+   `author_bdd_node` now filters its scan through `_harness_exclude_dirs()`,
+   same as the other two gates.
+2. **`self_check`'s ruff gate failed on unrelated pre-existing lint debt.**
+   Reproduced directly: `ruff check . --select E9,F --extend-exclude=coding_agent`
+   against a mini repro of the user's real `app.py` failed on a **pre-existing
+   duplicate `import os`**, nothing to do with the maker's change. Whole-worktree
+   scope is fine for the from-scratch kata fixture (nothing pre-exists to trip
+   on) but wrong for a real repo the goal only touches part of. **Fixed:** new
+   `changed_files(handle)` in `tools/worktree.py` (same intent-to-add diff
+   trick as `diff()`) lets `self_check_node` scope ruff to `*.py` files the
+   maker actually touched this run, falling back to `.` only if nothing
+   changed yet.
+3. **Run report gave no visibility into *why* a gate failed.** Diagnosing
+   both bugs above required blind reproduction in the sandbox because the
+   report only showed a boolean pass/fail plus a one-line lesson. **Fixed:**
+   `report.py::render_report()` now includes a "## self_check output" /
+   "## bdd_gate output" section with the last 40 lines of the actual
+   ruff/pytest stdout+stderr, but only for gates that ran and failed (kept
+   out of the happy path so successful reports don't balloon).
+4. **The maker renamed `app.py` → `app.py.bak` instead of editing it in
+   place.** The diff in the run report showed this alongside the legitimate
+   `rag_research_chatbot.py` move. `MAKER_SYSTEM_PROMPT` already said to
+   update files that reference a moved module, but didn't say *how* —
+   apparently permissive enough for the model to reach for `move_file` on a
+   file that wasn't itself the subject of the goal. **Fixed:** prompt now
+   explicitly reserves `move_file`/`delete_file` for the file actually being
+   relocated, and says any file that merely *references* it should be edited
+   in place with `write_file`.
+
+**Also fixed, same root cause as #1 in spirit:** every attempt separately
+hit `AgentExecutor`'s `max_iterations=8` ("Agent stopped due to max
+iterations") before finishing. A real multi-file refactor — read the
+target, write the new module, add an `__init__.py`, delete the old file,
+edit the importing file, run a self-check — doesn't comfortably fit in 8
+tool calls the way the single-file kata does. Raised to `max_iterations=20`.
+
+**Verified:** a new regression test,
+`test_author_bdd_excludes_nested_coding_agent_dir`, plants a decoy
+`coding_agent/sample_target/features/calculator.feature` inside the target
+(mirroring the exact self-hosting shape that caused bug #1) and asserts
+`author_bdd` adopts only the target's real, top-level feature file. Full
+suite: 50/50 pass. `ruff check coding_agent ui/coding_engineer_panel.py
+ui/graph_display.py` clean, both with `--select E9,F` and the project's
+default rule set. **Not yet verified:** a fifth live run against Ollama —
+the sandbox has no path to the user's machine, so the fix for the
+`app.py.bak` rename in particular (a prompt-wording change, not something a
+mocked-maker test can meaningfully exercise) is confirmed correct in
+reasoning and consistent with the observed failure, but not proven against
+a live model yet.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

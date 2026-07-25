@@ -47,6 +47,7 @@ from coding_agent.schemas import BddAuthorResult, TargetSpec
 from coding_agent.structured import StructuredOutputError, invoke_structured
 from coding_agent.tools.code_exec import Jail, JailViolation, run_command
 from coding_agent.tools.worktree import WorktreeHandle, create_worktree
+from coding_agent.tools.worktree import changed_files as worktree_changed_files
 from coding_agent.tools.worktree import commit as worktree_commit
 from coding_agent.tools.worktree import diff as worktree_diff
 
@@ -302,7 +303,13 @@ def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
         ]
     )
     agent = create_tool_calling_agent(llm, tools, prompt)
-    executor = AgentExecutor(agent=agent, tools=tools, max_iterations=8)
+    # max_iterations=8 was too tight for a real multi-file change: the first
+    # live self-hosted run ("Agent stopped due to max iterations" on all 4
+    # attempts) needed read+write on rag_research_chatbot.py, a new
+    # rag_agent/__init__.py, delete of the old file, an app.py import edit,
+    # and a run_pytest check -- more tool calls than a genuine refactor-shaped
+    # goal can fit in 8. Raised to a more realistic budget for multi-file work.
+    executor = AgentExecutor(agent=agent, tools=tools, max_iterations=20)
     task_message = HumanMessage(content=_maker_task_text(state))
     return executor.invoke({"messages": [task_message]})
 
@@ -369,10 +376,16 @@ def _route_after_author_bdd(state: CodingLoopState) -> str:
 
 def author_bdd_node(state: CodingLoopState) -> dict:
     worktree_dir = Path(state["worktree_dir"])
+    # Bug found on the first real self-hosted run: an unscoped rglob picked up
+    # coding_agent/sample_target/features/calculator.feature -- the agent's own
+    # demo fixture -- and froze it as the "definition of done" for an unrelated
+    # goal (moving rag_research_chatbot.py). Same harness-exclusion rule as
+    # self_check/bdd_gate (_harness_exclude_dirs), applied here too now.
+    harness_excludes = set(_harness_exclude_dirs(worktree_dir))
     existing = sorted(
         str(p.relative_to(worktree_dir)).replace(os.sep, "/")
         for p in worktree_dir.rglob("*.feature")
-        if ".git" not in p.parts
+        if ".git" not in p.parts and not harness_excludes & set(p.relative_to(worktree_dir).parts)
     )
 
     if existing:
@@ -464,7 +477,17 @@ def self_check_node(state: CodingLoopState) -> dict:
     timeout = state["budgets"]["cmd_timeout_s"]
     harness_excludes = _harness_exclude_dirs(worktree_dir)
 
-    # `--select E9,F` (pyflakes + syntax errors) rather than bare `ruff check .`:
+    # Scope ruff to files actually changed this run, not the whole worktree.
+    # Bug found on the first real self-hosted run: an unscoped `ruff check .`
+    # failed 4/4 attempts on a pre-existing duplicate `import os` in app.py --
+    # a file the maker never touched, unrelated to the goal. A target repo
+    # the goal doesn't touch everywhere in can easily have lint debt
+    # elsewhere; that shouldn't gate a change that has nothing to do with it.
+    handle = _handle_from_state(state)
+    changed = [p for p in worktree_changed_files(handle) if (worktree_dir / p).exists() and p.endswith(".py")]
+    ruff_targets = changed or ["."]  # nothing changed yet (shouldn't normally happen post-code) -> old behaviour
+
+    # `--select E9,F` (pyflakes + syntax errors) rather than bare `ruff check`:
     # self_check runs against an arbitrary target worktree whose own ruff
     # config (if any) we don't control and shouldn't depend on -- ruff's
     # config auto-discovery can pick up unrelated rule sets (or, on some
@@ -473,7 +496,7 @@ def self_check_node(state: CodingLoopState) -> dict:
     # selection keeps this gate a fast correctness check, not a style audit.
     ruff_result = run_command(
         "ruff",
-        ["check", ".", "--select", "E9,F", *[f"--extend-exclude={d}" for d in harness_excludes]],
+        ["check", *ruff_targets, "--select", "E9,F", *[f"--extend-exclude={d}" for d in harness_excludes]],
         cwd=worktree_dir,
         timeout_s=timeout,
     )

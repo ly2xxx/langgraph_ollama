@@ -111,6 +111,25 @@ def diff(handle: WorktreeHandle) -> str:
     return result.stdout
 
 
+def changed_files(handle: WorktreeHandle) -> list[str]:
+    """Paths (relative to the worktree root) touched since the run's baseline
+    commit -- tracked modifications and brand-new files alike (same
+    intent-to-add trick as diff()). Used to scope self_check's ruff pass to
+    what the maker actually changed, instead of the whole worktree: a target
+    repo the goal doesn't touch everywhere in can easily have pre-existing
+    lint debt elsewhere (confirmed on the first real self-hosted run --
+    self_check failed 4/4 attempts on an unrelated duplicate `import os` in
+    app.py, nothing to do with the goal). Paths may include ones that no
+    longer exist (deleted this run) -- callers should filter."""
+    intent = _run_git(["add", "-A", "-N"], cwd=handle.worktree_dir)
+    if intent.returncode != 0:
+        raise WorktreeError(f"git add -N failed: {intent.stderr}")
+    result = _run_git(["diff", "--name-only", "HEAD"], cwd=handle.worktree_dir)
+    if result.returncode != 0:
+        raise WorktreeError(f"git diff --name-only failed: {result.stderr}")
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
 def commit(handle: WorktreeHandle, message: str) -> str:
     """Stage everything and commit. Returns the new commit hash, or ''
     if there was nothing to commit."""

@@ -391,3 +391,27 @@ def test_self_check_excludes_nested_coding_agent_dir(kata_target, monkeypatch):
 
     assert final["status"] == "done"
     assert final["test_report"]["passed"] is True
+
+
+def test_author_bdd_excludes_nested_coding_agent_dir(kata_target, monkeypatch):
+    """Same self-hosting scenario, but for author_bdd's "adopt existing
+    .feature file" scan specifically: this is the more serious of the two
+    bugs found on the first real self-hosted run, since an unscoped rglob
+    silently froze coding_agent/sample_target/features/calculator.feature --
+    the agent's own demo fixture -- as the definition of done for a
+    completely unrelated goal. The nested copy must be ignored in favour of
+    the target's real, top-level feature file."""
+    nested_features = kata_target / "coding_agent" / "sample_target" / "features"
+    nested_features.mkdir(parents=True)
+    (nested_features / "calculator.feature").write_text(
+        "Feature: decoy\n  Scenario: should never be adopted\n    Given nothing\n"
+    )
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-author-bdd-exclude-1")
+
+    assert final["status"] == "done"
+    assert final["feature_paths"] == ["features/calculator.feature"]
+    assert not any("coding_agent" in p for p in final["feature_paths"])

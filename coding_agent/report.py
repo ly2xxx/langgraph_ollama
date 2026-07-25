@@ -26,6 +26,13 @@ def _fmt_list(items: list[str]) -> str:
     return "\n".join(f"- {item}" for item in items) if items else "(none)"
 
 
+def _tail(text: str | None, n: int = 40) -> str:
+    if not text:
+        return "(empty)"
+    lines = text.splitlines()
+    return "\n".join(lines[-n:])
+
+
 def render_report(state: dict[str, Any], outcome: str, commit_rev: str) -> str:
     spec = state.get("spec") or {}
     budgets = state.get("budgets") or {}
@@ -58,6 +65,35 @@ def render_report(state: dict[str, Any], outcome: str, commit_rev: str) -> str:
     lines.append(f"- self_check passed: {test_report.get('passed')}")
     lines.append(f"- bdd_gate passed: {bdd_report.get('passed')}")
     lines.append("")
+
+    # Added after the first live run: a boolean pass/fail plus a one-line
+    # lesson summary wasn't enough to diagnose *why* a gate failed without
+    # re-running it by hand. Last 40 lines of each command's actual output,
+    # only for gates that ran and didn't pass -- kept out of successful runs
+    # so the report doesn't balloon on the common path.
+    ruff = test_report.get("ruff") or {}
+    pytest_self_check = test_report.get("pytest") or {}
+    if test_report and not test_report.get("passed"):
+        lines.append("## self_check output")
+        if ruff.get("returncode") not in (0, None):
+            lines.append(f"**ruff** (returncode={ruff.get('returncode')}):")
+            lines.append("```")
+            lines.append(_tail(ruff.get("stdout")) + (("\n" + _tail(ruff.get("stderr"))) if ruff.get("stderr") else ""))
+            lines.append("```")
+        if pytest_self_check.get("returncode") not in (0, 5, None):
+            lines.append(f"**pytest** (returncode={pytest_self_check.get('returncode')}):")
+            lines.append("```")
+            lines.append(_tail(pytest_self_check.get("stdout")))
+            lines.append("```")
+        lines.append("")
+
+    if bdd_report and not bdd_report.get("passed"):
+        lines.append("## bdd_gate output")
+        lines.append(f"**pytest** (returncode={bdd_report.get('returncode')}):")
+        lines.append("```")
+        lines.append(_tail(bdd_report.get("stdout")))
+        lines.append("```")
+        lines.append("")
 
     lines.append("## Lessons")
     if lessons:

@@ -47,9 +47,12 @@ your change should be a genuine, real attempt at the goal, not a shortcut that o
 You have tools to read files, list directories, write files, delete files, move/rename files, \
 and run pytest inside the worktree to check your own work before you finish. If your change \
 involves moving something (e.g. relocating a module to a subfolder), write the new file(s) and \
-delete the old one(s) -- leaving the old file behind is not a clean move. If other files in the \
-worktree reference what you moved (e.g. an import), update those references too; you are not \
-restricted to only the files named in the goal. The BDD feature file(s) are frozen — do not attempt to \
-edit them; if a tool call to write one fails, that is expected and you should work around it by \
-changing the implementation instead. Work autonomously; do not ask for clarification. When you \
-believe your change is complete, stop calling tools and give a one-line summary of what you did."""
+delete the old one(s) -- leaving the old file behind is not a clean move. Only move/delete the \
+file(s) that are actually being relocated. For any OTHER file that merely references what you \
+moved (e.g. an import elsewhere in the codebase), edit its content in place with write_file -- \
+never move, rename, or delete a file just because it references something you changed; that \
+file itself isn't moving, only one line in it is. The BDD feature file(s) are frozen — do not \
+attempt to edit them; if a tool call to write one fails, that is expected and you should work \
+around it by changing the implementation instead. Work autonomously; do not ask for \
+clarification. When you believe your change is complete, stop calling tools and give a one-line \
+summary of what you did."""
