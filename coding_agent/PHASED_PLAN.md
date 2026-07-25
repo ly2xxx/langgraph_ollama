@@ -525,6 +525,52 @@ before fixing.
 
 ---
 
+## Phase 1 follow-up — self_check was linting the frozen BDD harness ✅
+
+Sixth live run. The rename + `__init__.py` fixes worked — none of
+`rag_research_chatbot.py`'s pre-existing debt was flagged this time. The move
+**actually completed** (confirmed on disk: `rag_agent/rag_research_chatbot.py`
+present, `rag_agent/__init__.py` empty, root file gone), yet the run still
+escalated on a *single* self_check finding:
+
+```
+features/steps/test_move_rag_research_chatbot.py:5:8 F401 `pytest` imported but unused
+```
+
+That file is the **step-definitions module author_bdd generated** — and it
+routinely writes an unused `import pytest` into it. self_check already
+excluded the feature directory from its *pytest* run (via `--ignore`), but
+never from its *ruff* pass: the step-defs file was a changed (new) file, so it
+landed in the differential's `changed` list and its F401 counted as
+introduced. But that harness is author_bdd's frozen definition-of-done, not
+the maker's implementation change — `bdd_gate` is what runs it. self_check has
+no business linting it.
+
+**Fixed:** self_check now drops any changed file living under a feature
+directory (derived from `state["feature_paths"]`) — as well as the agent's own
+package — before running ruff, via a new `_is_under_any()` path-prefix check.
+This is the ruff-side equivalent of the pytest `--ignore` that was already
+there. So self_check lints only the maker's actual implementation files;
+`bdd_gate` remains the sole gate on the BDD harness.
+
+**Why the maker still "stopped due to max iterations":** it wasn't actually
+stuck — the diff and on-disk state show the move fully done (import in app.py
+updated, package created, root file deleted). The maker just didn't emit an
+explicit "done" before its 20-call budget; the graph proceeds to self_check
+regardless, so this alone wouldn't have blocked finalization. The self_check
+F401 was the real blocker.
+
+**Verified:** new engine test `test_self_check_ignores_lint_in_bdd_harness`
+(maker implements the kata and drops a new `features/steps/extra_helper.py`
+with an unused `import pytest`; asserts the run finishes `done`). Full suite:
+59/59 pass. Ruff clean. With this, every self_check false-positive the RAG POC
+surfaced across rounds 3–6 is closed: unrelated-file debt, touched-file debt,
+moved-file debt, re-export `__init__.py`, and now the generated BDD harness.
+The move completing on disk means the next run should reach `bdd_gate` and
+finalize `done` — the first end-to-end live success, if the scenarios pass.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

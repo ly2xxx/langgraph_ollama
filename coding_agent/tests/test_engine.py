@@ -475,6 +475,29 @@ def test_self_check_forgives_lint_debt_in_a_moved_file(kata_target, monkeypatch)
     assert final["test_report"]["passed"] is True
 
 
+def test_self_check_ignores_lint_in_bdd_harness(kata_target, monkeypatch):
+    """self_check must not lint the frozen BDD harness (the feature dir and its
+    step defs) -- that's author_bdd-generated code that bdd_gate runs, not the
+    maker's implementation change. author_bdd routinely leaves an unused
+    `import pytest` (F401) in the step-defs file it writes; the live RAG POC
+    actually completed the move and then escalated *solely* because self_check
+    flagged that F401. Here a new .py under features/ carries an unused import;
+    the run must still finish done."""
+    _mock_suitable_intake(monkeypatch)
+
+    def fake_run_maker(llm, jail, state):
+        jail.write_file("calculator.py", CORRECT_CALCULATOR)
+        jail.write_file("features/steps/extra_helper.py", "import pytest\n")  # unused -> F401
+        return {"output": "implemented kata; added a helper under features/"}
+
+    monkeypatch.setattr("coding_agent.engine._run_maker", fake_run_maker)
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-bdd-lint-1")
+
+    assert final["status"] == "done"
+    assert final["test_report"]["passed"] is True
+
+
 def test_self_check_allows_reexport_init_py(kata_target, monkeypatch):
     """A brand-new package __init__.py that re-exports a name trips F401
     ('imported but unused') even though re-exporting is its entire purpose,

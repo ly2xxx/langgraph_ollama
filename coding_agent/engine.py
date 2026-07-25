@@ -594,6 +594,16 @@ def _render_ruff_findings(findings: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _is_under_any(rel_path: str, dirs: set[str]) -> bool:
+    """True if rel_path lives inside one of `dirs` (or is one of them)."""
+    parts = Path(rel_path).parts
+    for d in dirs:
+        dparts = Path(d).parts
+        if len(parts) >= len(dparts) and tuple(parts[: len(dparts)]) == dparts:
+            return True
+    return False
+
+
 def self_check_node(state: CodingLoopState) -> dict:
     worktree_dir = Path(state["worktree_dir"])
     timeout = state["budgets"]["cmd_timeout_s"]
@@ -605,8 +615,23 @@ def self_check_node(state: CodingLoopState) -> dict:
     # files the maker never touched; (2) scoping to changed files still failed
     # on pre-existing debt in a file the maker legitimately *had* to touch
     # (app.py's import line). Differential-vs-baseline forgives both.
+    #
+    # Also exclude the frozen BDD harness (the feature dir + its step defs) and
+    # the agent's own package: those aren't the maker's implementation change.
+    # author_bdd *generates* the step-defs file, and it routinely leaves an
+    # unused `import pytest` in it (F401) -- that's bdd_gate's code to run, not
+    # self_check's to lint. The live RAG POC's move actually completed, and the
+    # ONLY thing blocking finalization was self_check flagging F401 in that
+    # generated step-defs file.
+    excluded_dirs = set(harness_excludes) | {
+        str(Path(fp).parent).replace(os.sep, "/") for fp in state.get("feature_paths", [])
+    }
     handle = _handle_from_state(state)
-    changed = [p for p in worktree_changed_files(handle) if (worktree_dir / p).exists() and p.endswith(".py")]
+    changed = [
+        p
+        for p in worktree_changed_files(handle)
+        if (worktree_dir / p).exists() and p.endswith(".py") and not _is_under_any(p, excluded_dirs)
+    ]
 
     new_findings, ruff_result = _ruff_new_findings(worktree_dir, changed, handle, harness_excludes, timeout)
     if new_findings is None:
