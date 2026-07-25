@@ -51,6 +51,13 @@ def render_report(state: dict[str, Any], outcome: str, commit_rev: str) -> str:
     lines.append(f"- **Branch:** {state.get('branch', '?')}")
     lines.append(f"- **Commit:** {commit_rev or '(nothing to commit)'}")
     lines.append(f"- **Attempts:** {state.get('total_attempts', 0)} (budget: {budgets.get('max_total_attempts', '?')})")
+    tokens_used = state.get("tokens_used", 0)
+    if tokens_used:
+        tb = budgets.get("token_budget", 0)
+        lines.append(f"- **Tokens (best-effort):** {tokens_used}" + (f" (budget: {tb})" if tb else ""))
+    if state.get("worktree_dir"):
+        # Worktrees are kept for inspection (not auto-removed) -- point the human at it.
+        lines.append(f"- **Worktree (kept for inspection):** {state.get('worktree_dir')}")
     lines.append("")
 
     model_info = state.get("model_info") or {}

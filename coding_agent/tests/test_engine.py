@@ -292,6 +292,39 @@ def test_exhausts_budget_when_failures_keep_changing(kata_target, monkeypatch):
     assert "Escalation reason:**" in report_text
 
 
+def test_token_budget_is_a_hard_stop(kata_target, monkeypatch):
+    """Phase 4 (§3.4 exit 4): the token budget is a hard stop. The maker
+    reports token usage each attempt and fails *differently* each time (distinct
+    signatures, so no-progress never trips) -- once the running tally exceeds
+    the budget, diagnose escalates `token_budget`."""
+    from langchain_core.messages import AIMessage
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_diagnose(monkeypatch, category="test-logic")
+
+    counter = {"n": 0}
+
+    def fake_maker(llm, jail, state):
+        n = counter["n"]
+        counter["n"] += 1
+        jail.write_file("calculator.py", f"def add(numbers):\n    return {11 + n}\n")  # distinct failure each time
+        msg = AIMessage(content="done", usage_metadata={"input_tokens": 40, "output_tokens": 20, "total_tokens": 60})
+        return {"output": "wrote", "messages": [msg]}
+
+    monkeypatch.setattr("coding_agent.engine._run_maker", fake_maker)
+
+    final = _invoke(
+        kata_target,
+        "Implement the string-calculator kata.",
+        "run-tokenbudget-1",
+        budgets={"max_attempts_per_plan": 9, "max_total_attempts": 9, "token_budget": 100},
+    )
+
+    assert final["status"] == "escalated"
+    assert final["escalation_reason"] == "token_budget"
+    assert final["tokens_used"] > 100
+
+
 def test_flake_gets_a_free_retry(kata_target, monkeypatch):
     """A `flake` classification buys a retry that doesn't burn an attempt
     (§3.4). The maker fails once (classified flake), then succeeds; the free

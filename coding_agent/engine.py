@@ -67,6 +67,15 @@ from coding_agent.signatures import (
     template_message,
 )
 from coding_agent.structured import StructuredOutputError, invoke_structured
+
+try:
+    # telemetry lives at the repo root; it's optional and degrades to no-ops.
+    # Used here only for its pure token-usage extractor (no OTel import), so a
+    # token tally can ride in graph state and feed the §3.4 token budget.
+    from telemetry import extract_token_usage as _extract_token_usage
+except Exception:  # noqa: BLE001 -- telemetry is optional; never let its absence break the engine
+    def _extract_token_usage(_graph_output) -> tuple[int, int]:
+        return 0, 0
 from coding_agent.tools.code_exec import Jail, JailViolation, run_command
 from coding_agent.tools.worktree import WorktreeHandle, create_worktree
 from coding_agent.tools.worktree import changed_files as worktree_changed_files
@@ -74,6 +83,10 @@ from coding_agent.tools.worktree import commit as worktree_commit
 from coding_agent.tools.worktree import diff as worktree_diff
 from coding_agent.tools.worktree import file_at_baseline as worktree_file_at_baseline
 from coding_agent.tools.worktree import renamed_paths as worktree_renamed_paths
+
+# Display/telemetry label for this agent. Defined here (not in app.py) so the
+# panel can import it without a circular dependency on app.py.
+CODING_ENGINEER_LABEL = "Coding Engineer"
 
 DEFAULT_BUDGETS: dict[str, int] = {
     "max_attempts_per_plan": 3,
@@ -143,6 +156,7 @@ class CodingLoopState(TypedDict, total=False):
     # iteration
     attempt: int
     total_attempts: int
+    tokens_used: int  # Phase 4 -- best-effort running tally for the token budget (§3.4)
     run_started_at: float  # added in Phase 1 -- see module docstring
     last_diff: str
     test_report: dict
@@ -651,8 +665,14 @@ def code_node(state: CodingLoopState) -> dict:
     diff_text = worktree_diff(handle)
 
     summary = maker_result.get("output", "") if isinstance(maker_result, dict) else str(maker_result)
+    # Best-effort token tally: the maker (AgentExecutor) is where the bulk of
+    # tokens go, and its result may carry usage on the final AIMessage. Ollama
+    # often omits usage on tool-calling turns, so this under-counts rather than
+    # over-counts -- the token budget stays a safety valve, not a precise meter.
+    p_tok, c_tok = _extract_token_usage(maker_result if isinstance(maker_result, dict) else {})
     return {
         "last_diff": diff_text,
+        "tokens_used": state.get("tokens_used", 0) + p_tok + c_tok,
         "status": "coding",
         # A new attempt invalidates any prior review verdict -- clear it so
         # diagnose (Phase 3) doesn't mistake a stale reject for this attempt's
@@ -1102,11 +1122,15 @@ def diagnose_node(state: CodingLoopState) -> dict:
         }
 
     elapsed = time.time() - state.get("run_started_at", time.time())
+    token_budget = budgets.get("token_budget", 0)
     hard_budget = None
     if elapsed > budgets["wall_clock_s"]:
         hard_budget = "wall_clock"
     elif total_attempts > budgets["max_total_attempts"]:
         hard_budget = "max_total_attempts"
+    elif token_budget and state.get("tokens_used", 0) > token_budget:
+        # Token budget is a hard stop at this checkpoint, not a warning (§3.4).
+        hard_budget = "token_budget"
 
     # 1-2. No progress: same signature twice -> active plan exhausted. If another
     # candidate plan remains (and no hard budget is breached), switch to it via

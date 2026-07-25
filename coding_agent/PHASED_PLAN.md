@@ -735,19 +735,106 @@ the checker diversity the design is built around.
 
 ---
 
-## What's next — Phase 4
+## Phase 4 — UI & observability polish ✅
 
-Per `CODING_ENGINEER.md` §5 / §6: UI & observability polish, now that the loop
-itself is feature-complete.
+The loop was feature-complete after Phase 3; Phase 4 is the §5 surface: make it
+pleasant to drive from the browser and visible in the observability stack.
 
-- **app.py / panel**: budgets expander in the sidebar, a diff viewer for the
-  produced branch, a verdict banner, `DEMO_QUERIES` entry, and wrapping the
-  run in `telemetry.track_request(CODING_ENGINEER, model)` with per-node
-  `record_tokens` — which is also what makes the Phase 3 "judge + review use
-  the secondary model" visible as telemetry spans, not just a unit assertion.
-- **Token budget**: `budgets.token_budget` is enforced as a hard stop in
-  diagnose but nothing tallies tokens yet — wire `telemetry.extract_token_usage`
-  so the tally is real.
-- **Worktree cleanup**: still-open decision from the Phase 1 follow-ups —
-  auto-remove finished-run worktrees vs. keep them for inspection (currently
-  they persist under `.loop/worktrees/`).
+**Delivered:**
+
+1. **Panel polish (`ui/coding_engineer_panel.py`).**
+   - A **budgets expander** in the sidebar (attempts/plan, ToT k = max_plans,
+     total attempts, per-command timeout, wall-clock, token budget) whose
+     values are threaded straight into `stream_run(..., budgets=...)` — the
+     §3.2/§3.4 stop rails, tunable without touching code.
+   - A **demo-goal selector** (relocate the RAG chatbot, the sample-target
+     kata, an app.py de-dup) that pre-fills the goal box but stays editable;
+     Run is disabled until there's a goal.
+   - A **finish view** read back from the run's `state.json` / `run-report.md`:
+     a **verdict banner** (✅ done with the review verdict, or ⚠️ escalated with
+     the reason), the **diff produced on the branch** (`st.code(..., "diff")`),
+     the branch name, and the run report.
+2. **Telemetry wiring.** The run is wrapped in
+   `telemetry.track_request("Coding Engineer", primary_model)` (request /
+   latency / active-in-flight metrics), and each node update is passed through
+   `telemetry.extract_token_usage` → `record_tokens`. Combined with the
+   OpenInference auto-instrumentation already in `telemetry.py`, the Phase 3
+   "judge + review run on the secondary model" is now visible as spans, not
+   just a unit assertion. `CODING_ENGINEER_LABEL` lives in `engine.py` so the
+   panel can import it without a circular dependency on `app.py`.
+3. **Real token tally + budget.** `code_node` now accumulates a best-effort
+   `tokens_used` in state via `telemetry.extract_token_usage` on the maker
+   result (the maker is where the bulk of tokens go; the import is guarded so
+   the engine never hard-depends on telemetry). `diagnose` enforces
+   `budgets.token_budget` as a hard stop (§3.4 exit 4) against that tally. It's
+   deliberately an under-count, not a precise meter — Ollama often omits usage
+   on tool-calling turns — so the budget stays a safety valve. The report shows
+   the tally when non-zero.
+4. **Worktree cleanup — decision: KEEP for inspection.** Finished-run
+   worktrees are intentionally *not* auto-removed; they stay under
+   `.loop/worktrees/<run_id>/` so a human can inspect exactly what the agent
+   did on its branch before merging. The report and the panel both surface the
+   worktree path and branch name, and the report labels it "kept for
+   inspection" so the persistence is obviously intentional, not a leak. (The
+   `.loop/` tree is gitignored, so this never pollutes `git status`.)
+
+**Verified:**
+- `test_token_budget_is_a_hard_stop` — a maker that reports usage each attempt
+  and fails differently each time (distinct signatures, so no-progress doesn't
+  pre-empt it) escalates `token_budget` once the tally passes the budget.
+- `test_panel_import.py` — the panel module imports and exposes its entry point
+  + demo goals (streamlit is a real dep in the sandbox); `CODING_ENGINEER_LABEL`
+  is asserted.
+- Full `coding_agent` suite: **82 pass** (28 engine + 54 unit), ruff clean
+  (`--select E9,F` and default). The token wiring touches every run's
+  `code_node` and `diagnose`; the whole pre-Phase-4 suite still passes, and the
+  panel `py_compile`s + imports under the installed streamlit.
+
+**Not verified in-sandbox (no model / no browser):** the actual Streamlit
+render, the OTel spans reaching a live collector, and real token counts from
+Ollama (the tally is exercised only with synthetic usage in the test). These
+are the pieces to eyeball on a live run.
+
+### Phase 4 follow-up — panel UX (model overrides, target picker, run history) ✅
+
+Three requested panel improvements, all self-contained in
+`ui/coding_engineer_panel.py`:
+
+1. **Per-run model overrides.** The sidebar budgets expander gained Primary /
+   Secondary model text inputs (default to whatever `.env` resolves to). On
+   Run they're written to `CODING_AGENT_PRIMARY_MODEL` /
+   `CODING_AGENT_SECONDARY_MODEL` in the process env just before `stream_run`;
+   `get_llm` reads env at call time, so the override takes effect for that run
+   without restarting the app. Free text rather than a dropdown, since there's
+   no Ollama model-discovery to populate a fixed list — you can point at any
+   model or (future) provider. Blank leaves `.env` untouched.
+2. **Target directory picker.** Replaced the free text box with a selectbox of
+   `.` + the repo's immediate subdirectories (Streamlit has no native folder
+   picker), with an "Other (type a path)…" escape that reveals a text box for
+   an arbitrary path. Defaults to `.`.
+3. **Per-session run history.** Finished runs are remembered in
+   `st.session_state` (run_id + goal) and rendered as a "Previous runs" picker.
+   Because every run's `state.json` / `run-report.md` persist on disk, the
+   finish view re-renders from disk for any past run — so accidentally
+   switching the demo goal (or any widget) no longer loses results; just pick
+   the run back. `_finish_view` was refactored to read status/verdict/tokens
+   from `state.json` so it works identically for a live run and a recalled one.
+
+**Verified:** `test_panel_import.py` grew tests for `_apply_model_overrides`
+(sets env; blank doesn't clobber) and `_candidate_target_dirs` (`.` first,
+skips `.venv`). Full suite: **84 pass** (28 engine + 56 unit), ruff clean.
+
+---
+
+## Status: all four phases complete
+
+Phases 0–4 of `CODING_ENGINEER.md` §6 are implemented, tested (82 passing,
+ruff clean), and — for Phases 1–3 — confirmed on live Ollama runs. The Coding
+Engineer is a full non-stop code/test/BDD agent: ToT planning with a secondary
+judge, a jailed maker, deterministic self_check/bdd_gate gates, an
+LLM-classified diagnose with signature-based no-progress detection, an
+adversarial secondary reviewer, durable checkpoint/resume + HITL approval, and
+a Streamlit panel with budgets, streaming, telemetry, a verdict banner, and a
+diff viewer. Possible follow-ups, none required: a non-Ollama provider branch
+in `models.py` (the seam is there), parallel ToT beam execution (deliberately
+deferred for local-model token cost), and `gh pr create` from `finalize`.
