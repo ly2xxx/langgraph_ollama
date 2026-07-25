@@ -63,3 +63,23 @@ class BddAuthorResult(BaseModel):
     ambiguity_reason: str | None = Field(
         default=None, description="One sentence: what's ambiguous and what the two readings would be."
     )
+
+
+class DiagnosisResult(BaseModel):
+    """diagnose's structured read of a failed attempt (CODING_ENGINEER.md §3.3).
+    The failure_signature (§3.4) is computed in code from the traceback, NOT
+    here -- this call only classifies the failure and distils a one-line lesson
+    the next attempt can learn from. Routing is pure code; category only
+    affects whether a `flake` gets its one free retry."""
+
+    category: str = Field(
+        description="One of: syntax | test-logic | env | flake | design. "
+        "'syntax' = the code doesn't parse/import; 'test-logic' = the implementation is wrong; "
+        "'env' = missing dependency/config/network, not the code's fault; "
+        "'flake' = non-deterministic (timing/order/random) and would plausibly pass on a re-run; "
+        "'design' = the approach itself can't satisfy the criteria without rethinking the plan."
+    )
+    insight: str = Field(
+        description="One sentence the next attempt can act on -- what went wrong and the direction of the fix. "
+        "Concrete, not a restatement of the error."
+    )

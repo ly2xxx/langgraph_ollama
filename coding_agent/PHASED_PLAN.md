@@ -571,12 +571,110 @@ finalize `done` — the first end-to-end live success, if the scenarios pass.
 
 ---
 
-## What's next — Phase 2
+## Phase 2 — Rails & memory ✅
 
-Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real
-signature-based no-progress detection (§3.4's `sha1(phase | test_name |
-error_class | message_template | top_frame_func)` recipe), the two-plans-
-exhausted hard exit (moot until Phase 3 adds a second plan, but the
-single-plan budget-exhaustion path already implemented here is the Phase 2
-starting point), and tests for the stop-flag (already implemented and
-tested in Phase 1) plus the `author_bdd` interrupt/resume path.
+Phase 1 (plus the six follow-up rounds) got the loop running end-to-end and
+green on a real goal. Phase 2 is the "don't run forever, and learn between
+attempts" layer from CODING_ENGINEER.md §3.4 / §6: real failure signatures,
+no-progress detection, an LLM-classified diagnose, and durable pause/resume.
+
+**Delivered:**
+
+1. **`coding_agent/signatures.py`** — the §3.4 recipe as code:
+   `sha1(phase | normalised_test_name | error_class | message_template |
+   top_frame_func)`. `normalise_test_name` drops the parametrisation suffix
+   (`test_add[3-5]` -> `test_add`); `template_message` strips the things that
+   churn between edits (paths, line numbers, hex, durations, timestamps) but
+   deliberately keeps assertion *values* so `expected 3 got 5` and
+   `expected 4 got 6` stay distinct; `extract_failures` pulls the signable
+   fields out of a pytest-json-report. 10 unit tests pin the "stable across
+   churn, distinct across real differences" contract.
+2. **Gates capture failing tests.** `self_check`/`bdd_gate` now store a
+   normalised `failures` list (and self_check a `ruff_codes` list) alongside
+   the summary, so diagnose can sign the actual failure rather than a
+   stringified summary.
+3. **LLM-classified diagnose.** New `DiagnosisResult` schema (category ∈
+   syntax|test-logic|env|flake|design + a one-line insight), `_llm_diagnose`
+   boundary via `invoke_structured`, and `DIAGNOSE_PROMPT`. The call degrades
+   gracefully — any model/network error falls back to an `unknown` category
+   and the code-only summary, so a diagnose hiccup never crashes the loop.
+4. **`diagnose_node` rewrite** implementing the §3.4 hard exits in order:
+   stop flag; **same signature twice in a row → active plan exhausted** (with
+   a single plan, that escalates as `no_progress`; the machinery to route to a
+   fresh plan and only escalate on the *second* consecutive exhaustion is in
+   place for Phase 3); then the budget checks. A `flake` classification buys a
+   bounded number of free retries (`_MAX_FLAKE_FREE_RETRIES = 2`) that don't
+   burn an attempt — but never for a no-progress repeat, since an identical
+   failure twice isn't flakiness. Routing is pure code: diagnose records
+   `diagnosis.action` (retry | new_plan | escalate) and `_route_after_diagnose`
+   reads it.
+5. **Report** surfaces each lesson's category and short signature, and calls
+   out a no-progress stall explicitly when the last two signatures match.
+6. **State schema** gained `failure_signature`, `prev_failure_signature`,
+   `exhausted_plan_ids`, `flake_free_retries`, `diagnosis`, and a `category`
+   on each `Lesson`.
+
+**Verified (all against real ruff/pytest/git subprocesses; the three LLM
+boundaries mocked):**
+- `test_no_progress_escalates_on_identical_failure` — a stuck maker producing
+  the identical BDD failure escalates as `no_progress` after just 2 attempts,
+  well inside a generous budget, and both lessons share a signature.
+- `test_exhausts_budget_when_failures_keep_changing` — when each attempt fails
+  *differently* (distinct signatures, so no-progress never trips) the attempt
+  budget is the backstop; all signatures distinct.
+- `test_flake_gets_a_free_retry` — a `flake` classification retries without
+  incrementing `total_attempts`.
+- `test_author_bdd_pauses_and_resumes_when_hitl_on_and_ambiguous`,
+  `..._does_not_pause_on_clear_goal_with_hitl_on`,
+  `..._does_not_pause_when_hitl_off_even_if_ambiguous` — the HITL flag gates
+  the interrupt exactly as speced: pause only when the flag is on *and* the
+  draft is ambiguous; resume continues to `done`.
+- `test_killed_run_resumes_from_sqlite_checkpoint` — a run paused at the
+  approval interrupt is resumed to completion by a **fresh graph instance on a
+  new sqlite connection** over the same db + thread_id (stands in for a
+  restarted process).
+- 10 new `test_signatures.py` unit tests; the Phase 1 `test_retry_then_pass` /
+  budget test updated for the new signed-lesson shape and no-progress
+  behaviour.
+
+Full `coding_agent` suite: **75 pass** (24 engine + 51 unit), ruff clean
+(`--select E9,F` and default). Detecting the interrupt under `.invoke()` (vs
+`.stream()`) turned out to need `graph.get_state(cfg).next` + task interrupts
+rather than a `__interrupt__` return key — confirmed against the pinned
+langgraph 0.3.34 before writing the tests.
+
+**Deferred to Phase 3 (per §6):** ToT/GoT plan proposal + judging (Phase 2
+still uses the single fixed `plan-1`, so the "two consecutive plans exhausted"
+exit and plan-switch routing exist but can't fire yet), the adversarial
+reviewer + review-rejection signatures, and cross-plan lesson aggregation.
+
+**Not yet verified:** a live Ollama run exercising the real `_llm_diagnose`
+classification and the actual interrupt in the Streamlit panel — the sandbox
+has no model, so as with every prior round the LLM-facing prompt itself is the
+one thing left to sanity-check live.
+
+---
+
+## What's next — Phase 3
+
+Per `CODING_ENGINEER.md` §6 / §3.6: the "intelligence" layer that the Phase 2
+rails were built to support.
+
+- **ToT/GoT planning** in `plan_tot`: the primary model proposes several
+  candidate plans, the secondary model judges/scores them, and the loop works
+  the best one — replacing today's single fixed `plan-1`. This is what finally
+  exercises the plan-switching path already wired into diagnose: on a
+  no-progress plan exhaustion, route to `plan_tot` for a fresh plan built on
+  the aggregated lessons, and only escalate on the **second** consecutive
+  exhaustion (§3.4 exit 2).
+- **Adversarial reviewer** (secondary model) after `bdd_gate` passes: an
+  independent maker/checker separation that can `reject` on blocker/major
+  findings. Review rejections get signed too — `review_signature(location,
+  severity)` already exists in `signatures.py` — so a maker/checker stalemate
+  is caught by the same no-progress rule (§3.4 exit 3).
+- **Cross-plan lesson aggregation** (GoT): carry distilled lessons across plan
+  switches so a new plan doesn't repeat a dead end.
+
+Phase 4 then is the UI/observability polish (§5): budgets expander, diff
+viewer, demo queries, telemetry wiring, and the worktree-cleanup decision
+still open from the Phase 1 follow-ups.

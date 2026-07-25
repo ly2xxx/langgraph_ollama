@@ -106,7 +106,21 @@ def render_report(state: dict[str, Any], outcome: str, commit_rev: str) -> str:
     lines.append("## Lessons")
     if lessons:
         for lesson in lessons:
-            lines.append(f"- attempt {lesson.get('attempt')} ({lesson.get('plan_id')}): {lesson.get('insight')}")
+            sig = lesson.get("failure_signature")
+            sig_short = f" [{sig[:8]}]" if sig else ""
+            cat = lesson.get("category")
+            cat_tag = f" ({cat})" if cat else ""
+            lines.append(
+                f"- attempt {lesson.get('attempt')} ({lesson.get('plan_id')}){cat_tag}{sig_short}: "
+                f"{lesson.get('insight')}"
+            )
+        # A repeated signature is *why* a run stops early on no-progress -- make
+        # that visible so a human reading the report can see the stall, not just
+        # the escalation reason (CODING_ENGINEER.md §3.4).
+        sigs = [ls.get("failure_signature") for ls in lessons if ls.get("failure_signature")]
+        if len(sigs) >= 2 and sigs[-1] == sigs[-2]:
+            lines.append("")
+            lines.append(f"> No-progress: the same failure signature `{sigs[-1][:8]}` occurred twice in a row.")
     else:
         lines.append("(none)")
     lines.append("")

@@ -39,6 +39,27 @@ would produce materially different scenarios — this is a last resort, not a ro
 the agent is expected to act autonomously, so prefer proceeding over pausing."""
 
 
+DIAGNOSE_PROMPT = """You are the diagnostician in an autonomous code/test/BDD loop. An attempt \
+just failed a gate. Classify the failure and distil ONE actionable lesson for the next attempt — \
+you are not fixing it yourself, you are telling the next maker what to change.
+
+Goal: {goal}
+Gate that failed: {phase}
+Failure detail:
+{failure_detail}
+
+Recent lessons (most recent last), so you can tell a stall from progress:
+{lessons}
+
+Classify `category` as exactly one of: syntax (code doesn't parse/import), test-logic (the \
+implementation is wrong), env (missing dependency/config/network — not the code's fault), flake \
+(non-deterministic — timing, ordering, randomness — would plausibly pass if simply re-run), or \
+design (the current approach fundamentally can't satisfy the criteria and the plan needs \
+rethinking). Only choose `flake` if the failure genuinely looks non-deterministic — it buys a \
+free retry, so don't use it to paper over a real bug. Make `insight` concrete and forward-looking: \
+what to change next, not a restatement of the error."""
+
+
 MAKER_SYSTEM_PROMPT = """You are the maker in an autonomous code/test/BDD loop. You make the \
 smallest change that could satisfy the acceptance criteria and the frozen BDD scenarios below — \
 you do not need to pass the BDD gate yourself (an independent check runs after you finish), but \

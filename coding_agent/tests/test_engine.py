@@ -99,6 +99,18 @@ def _mock_maker_sequence(monkeypatch, contents: list[str]):
     return calls
 
 
+def _mock_diagnose(monkeypatch, category="test-logic"):
+    """Mock the diagnose LLM boundary (Phase 2) so tests that reach diagnose
+    don't need a live model. The failure_signature is still computed in code
+    from the real pytest/ruff failures -- only the category/insight are mocked."""
+    from coding_agent.schemas import DiagnosisResult
+
+    def fake(llm, state, phase, detail):
+        return DiagnosisResult(category=category, insight=f"{phase} failed — {detail[:80]}")
+
+    monkeypatch.setattr("coding_agent.engine._llm_diagnose", fake)
+
+
 def _invoke(target: Path, goal: str, run_id: str, budgets: dict | None = None, graph=None):
     graph = graph or build_graph()
     initial_state = {
@@ -173,6 +185,7 @@ def test_checkpointed_graph_via_coding_engineer(kata_target, monkeypatch):
 
 def test_retry_then_pass(kata_target, monkeypatch):
     _mock_suitable_intake(monkeypatch)
+    _mock_diagnose(monkeypatch)
     calls = _mock_maker_sequence(monkeypatch, [BROKEN_CALCULATOR, CORRECT_CALCULATOR])
 
     final = _invoke(kata_target, "Implement the string-calculator kata.", "run-retry-1")
@@ -182,33 +195,86 @@ def test_retry_then_pass(kata_target, monkeypatch):
     assert final["total_attempts"] == 1  # one failed cycle before success
     assert len(final["lessons"]) == 1
     assert "bdd_gate failed" in final["lessons"][0]["insight"]
+    assert final["lessons"][0]["failure_signature"]  # Phase 2: signed
 
     report_text = _report_path("run-retry-1").read_text()
-    assert "attempt 1 (plan-1): bdd_gate failed" in report_text
+    assert "attempt 1 (plan-1)" in report_text
+    assert "bdd_gate failed" in report_text
 
 
-# -- budget exhaustion -> escalate -----------------------------------------
+# -- no-progress + budget exhaustion -> escalate ---------------------------
 
 
-def test_exhausts_budget_and_escalates(kata_target, monkeypatch):
+def test_no_progress_escalates_on_identical_failure(kata_target, monkeypatch):
+    """Phase 2 (§3.4 exit 1): the SAME failure signature twice in a row means
+    the active plan is exhausted -- with a single plan (Phase 2) that escalates
+    immediately, well before the attempt budget. A stuck maker producing the
+    identical BDD failure every time is exactly the 'Ralph-Wiggum runaway' the
+    no-progress detector exists to cut short."""
     _mock_suitable_intake(monkeypatch)
-    calls = _mock_maker_sequence(monkeypatch, [BROKEN_CALCULATOR])  # never fixed
+    _mock_diagnose(monkeypatch, category="test-logic")
+    calls = _mock_maker_sequence(monkeypatch, [BROKEN_CALCULATOR])  # never fixed -> identical failure
 
     final = _invoke(
         kata_target,
         "Implement the string-calculator kata.",
-        "run-escalate-1",
-        budgets={"max_attempts_per_plan": 2, "max_total_attempts": 2},
+        "run-noprogress-1",
+        budgets={"max_attempts_per_plan": 9, "max_total_attempts": 9},  # generous: prove no-progress, not budget
     )
 
     assert final["status"] == "escalated"
-    assert final["escalation_reason"] in ("max_attempts_per_plan", "max_total_attempts")
-    assert calls["n"] == 3  # initial attempt + 2 retries before the budget check trips
-    assert len(final["lessons"]) == 3  # diagnose is entered once per failed attempt
+    assert final["escalation_reason"] == "no_progress"
+    assert calls["n"] == 2  # first attempt + one retry, then the repeat is caught
+    assert len(final["lessons"]) == 2
+    sigs = [ls["failure_signature"] for ls in final["lessons"]]
+    assert sigs[0] == sigs[1]  # identical signature is *why* it stopped
 
-    report_text = _report_path("run-escalate-1").read_text()
+    report_text = _report_path("run-noprogress-1").read_text()
+    assert "No-progress" in report_text
+
+
+def test_exhausts_budget_when_failures_keep_changing(kata_target, monkeypatch):
+    """The backstop: when each attempt fails *differently* (distinct signatures,
+    so no-progress never trips) the attempt budget is what stops the run. Each
+    broken implementation returns a different constant, so the first failing
+    scenario's assertion message -- and thus the signature -- differs each time."""
+    _mock_suitable_intake(monkeypatch)
+    _mock_diagnose(monkeypatch, category="test-logic")
+    variants = [f"def add(numbers):\n    return {n}\n" for n in (11, 12, 13, 14)]
+    calls = _mock_maker_sequence(monkeypatch, variants)
+
+    final = _invoke(
+        kata_target,
+        "Implement the string-calculator kata.",
+        "run-budget-1",
+        budgets={"max_attempts_per_plan": 3, "max_total_attempts": 9},
+    )
+
+    assert final["status"] == "escalated"
+    assert final["escalation_reason"] == "max_attempts_per_plan"
+    assert calls["n"] == 4  # attempts 1-3 retried (distinct sigs), 4th trips the per-plan budget
+    sigs = [ls["failure_signature"] for ls in final["lessons"]]
+    assert len(set(sigs)) == len(sigs)  # all distinct -> no-progress never fired
+
+    report_text = _report_path("run-budget-1").read_text()
     assert "Outcome:** escalated" in report_text
     assert "Escalation reason:**" in report_text
+
+
+def test_flake_gets_a_free_retry(kata_target, monkeypatch):
+    """A `flake` classification buys a retry that doesn't burn an attempt
+    (§3.4). The maker fails once (classified flake), then succeeds; the free
+    retry means total_attempts stays 0 even though a cycle failed."""
+    _mock_suitable_intake(monkeypatch)
+    _mock_diagnose(monkeypatch, category="flake")
+    _mock_maker_sequence(monkeypatch, [BROKEN_CALCULATOR, CORRECT_CALCULATOR])
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-flake-1")
+
+    assert final["status"] == "done"
+    assert final["total_attempts"] == 0  # the failed cycle was a free flake retry
+    assert final.get("flake_free_retries") == 1
+    assert "[flake" in final["lessons"][0]["insight"]
 
 
 # -- suitability gate --------------------------------------------------------
@@ -248,6 +314,169 @@ def test_intake_structured_failure_escalates_with_report(kata_target, monkeypatc
     report_text = _report_path("run-parsefail-1").read_text()
     assert "Outcome:** escalated" in report_text
     assert "structured-output failure" in report_text
+
+
+# -- author_bdd HITL interrupt + checkpoint resume (Phase 2) -----------------
+
+# A self-passing scenario so a resumed/clear run reaches `done` without the
+# maker needing to implement anything -- the HITL tests are about the
+# pause/resume mechanics, not about solving a kata.
+_TRIVIAL_FEATURE = "Feature: trivial\n  Scenario: always\n    Given a thing\n    Then it holds\n"
+_TRIVIAL_STEPS = (
+    "from pytest_bdd import scenarios, given, then\n"
+    "scenarios('../trivial.feature')\n\n"
+    "@given('a thing')\n"
+    "def _a():\n    pass\n\n"
+    "@then('it holds')\n"
+    "def _b():\n    assert True\n"
+)
+
+
+def _mock_author_bdd(monkeypatch, ambiguity):
+    from coding_agent.schemas import BddAuthorResult
+
+    def fake(llm, state):
+        return BddAuthorResult(
+            feature_gherkin=_TRIVIAL_FEATURE,
+            feature_relative_path="features/trivial.feature",
+            step_defs_python=_TRIVIAL_STEPS,
+            step_defs_relative_path="features/steps/test_trivial.py",
+            ambiguity=ambiguity,
+            ambiguity_reason="two plausible readings" if ambiguity else None,
+        )
+
+    monkeypatch.setattr("coding_agent.engine._llm_author_bdd", fake)
+
+
+def _mock_maker_noop(monkeypatch):
+    monkeypatch.setattr("coding_agent.engine._run_maker", lambda llm, jail, state: {"output": "noop"})
+
+
+def _is_paused(graph, config) -> bool:
+    """With .invoke() (as opposed to .stream()), an interrupt surfaces as a
+    paused checkpoint: a pending `next` node plus an interrupt on its task --
+    not a '__interrupt__' key in the return value. This is how a UI would
+    detect 'waiting for approval'."""
+    snap = graph.get_state(config)
+    return bool(snap.next) and any(task.interrupts for task in snap.tasks)
+
+
+def _fresh_bdd_target(kata_target):
+    """Remove the kata's adopt-existing feature so author_bdd drafts (and can
+    pause), and drop its step defs so bdd_gate only runs the drafted scenario."""
+    import shutil
+
+    shutil.rmtree(kata_target / "features")
+    return kata_target
+
+
+def test_author_bdd_pauses_and_resumes_when_hitl_on_and_ambiguous(kata_target, monkeypatch):
+    """§4 kill/approve: with the HITL flag on and an ambiguous goal, author_bdd
+    pauses (langgraph interrupt) before the loop goes non-stop; resuming with an
+    approval continues the run to completion."""
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.types import Command
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_author_bdd(monkeypatch, ambiguity=True)
+    _mock_maker_noop(monkeypatch)
+    _fresh_bdd_target(kata_target)
+
+    graph = build_graph(checkpointer=MemorySaver())
+    config = {"configurable": {"thread_id": "run-hitl-1"}, "recursion_limit": 150}
+    initial = {
+        "run_id": "run-hitl-1",
+        "target_dir": str(kata_target),
+        "goal": "do the ambiguous thing",
+        "hitl_bdd_approval": True,
+        "budgets": {},
+    }
+
+    graph.invoke(initial, config=config)
+    assert _is_paused(graph, config)  # halted for human approval
+
+    resumed = graph.invoke(Command(resume={"approved": True}), config=config)
+    assert resumed["status"] == "done"
+    assert resumed["feature_paths"] == ["features/trivial.feature"]
+
+
+def test_author_bdd_does_not_pause_on_clear_goal_with_hitl_on(kata_target, monkeypatch):
+    """The autonomy default: HITL on but the goal is unambiguous -> no pause,
+    the run proceeds straight through."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_author_bdd(monkeypatch, ambiguity=False)
+    _mock_maker_noop(monkeypatch)
+    _fresh_bdd_target(kata_target)
+
+    graph = build_graph(checkpointer=MemorySaver())
+    config = {"configurable": {"thread_id": "run-hitl-2"}, "recursion_limit": 150}
+    final = graph.invoke(
+        {
+            "run_id": "run-hitl-2",
+            "target_dir": str(kata_target),
+            "goal": "do the clear thing",
+            "hitl_bdd_approval": True,
+            "budgets": {},
+        },
+        config=config,
+    )
+    assert not _is_paused(graph, config)
+    assert final["status"] == "done"
+
+
+def test_author_bdd_does_not_pause_when_hitl_off_even_if_ambiguous(kata_target, monkeypatch):
+    """The flag gates the pause: HITL off means even an ambiguous goal does not
+    interrupt -- the agent stays non-stop by default."""
+    _mock_suitable_intake(monkeypatch)
+    _mock_author_bdd(monkeypatch, ambiguity=True)
+    _mock_maker_noop(monkeypatch)
+    _fresh_bdd_target(kata_target)
+
+    final = _invoke(kata_target, "do the ambiguous thing", "run-hitl-3")  # hitl defaults off
+    assert "__interrupt__" not in final
+    assert final["status"] == "done"
+
+
+def test_killed_run_resumes_from_sqlite_checkpoint(kata_target, monkeypatch):
+    """§6 durability: a run interrupted for approval is checkpointed to disk;
+    a *fresh* graph instance (standing in for a restarted process) built on the
+    same sqlite db + thread_id resumes it to completion."""
+    import os
+    import sqlite3
+
+    from langgraph.checkpoint.sqlite import SqliteSaver
+    from langgraph.types import Command
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_author_bdd(monkeypatch, ambiguity=True)
+    _mock_maker_noop(monkeypatch)
+    _fresh_bdd_target(kata_target)
+
+    db_path = Path(os.environ["CODING_AGENT_LOOP_DIR"]) / "resume.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    config = {"configurable": {"thread_id": "run-resume-1"}, "recursion_limit": 150}
+    initial = {
+        "run_id": "run-resume-1",
+        "target_dir": str(kata_target),
+        "goal": "do the ambiguous thing",
+        "hitl_bdd_approval": True,
+        "budgets": {},
+    }
+
+    # First process: run until the approval interrupt, then "die".
+    conn1 = sqlite3.connect(str(db_path), check_same_thread=False)
+    graph1 = build_graph(checkpointer=SqliteSaver(conn1))
+    graph1.invoke(initial, config=config)
+    assert _is_paused(graph1, config)
+    conn1.close()
+
+    # Second process: brand-new connection + graph over the same db resumes it.
+    conn2 = sqlite3.connect(str(db_path), check_same_thread=False)
+    resumed = build_graph(checkpointer=SqliteSaver(conn2)).invoke(Command(resume={"approved": True}), config=config)
+    assert resumed["status"] == "done"
+    conn2.close()
 
 
 # -- tool arg-schema collisions (live-run fix) -------------------------------
@@ -529,6 +758,7 @@ def test_self_check_fails_on_newly_introduced_finding(kata_target, monkeypatch):
     keeps writing the same file, so the run escalates, proving the gate blocks
     on the introduced finding rather than letting it through."""
     _mock_suitable_intake(monkeypatch)
+    _mock_diagnose(monkeypatch)
     dirty_calc = "import sys\n" + CORRECT_CALCULATOR  # unused import -> F401, not in baseline
 
     def fake_run_maker(llm, jail, state):
