@@ -130,6 +130,20 @@ def changed_files(handle: WorktreeHandle) -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
+def file_at_baseline(handle: WorktreeHandle, rel_path: str) -> str | None:
+    """The file's content at the run's baseline commit (HEAD), or None if it
+    didn't exist there (i.e. the maker added it this run, so there's nothing
+    to compare against). Used by self_check to tell a lint finding the maker
+    *introduced* from one that was already in the file before the run --
+    pre-existing debt in a file the maker legitimately had to touch (e.g. an
+    import line in a file that already had unrelated debt) shouldn't gate a
+    change whose BDD scenarios pass."""
+    result = _run_git(["show", f"HEAD:{rel_path}"], cwd=handle.worktree_dir)
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
 def commit(handle: WorktreeHandle, message: str) -> str:
     """Stage everything and commit. Returns the new commit hash, or ''
     if there was nothing to commit."""

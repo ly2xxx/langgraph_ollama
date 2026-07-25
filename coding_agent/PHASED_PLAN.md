@@ -418,6 +418,58 @@ default rule set.
 
 ---
 
+## Phase 1 follow-up — self_check gated on debt in a file the maker *had* to touch, + a UI crash ✅
+
+Fourth live run of the POC. The maker actually succeeded — its own messages
+across attempts said "All 6 BDD scenarios pass" and "the move is complete
+and verified" — but the run still escalated after 4 attempts, all failing
+at `self_check`, and then the panel *crashed* trying to display the report.
+Two distinct bugs:
+
+1. **`self_check`'s changed-files ruff scoping wasn't enough.** The previous
+   round scoped ruff to files the maker changed, which fixes the case where
+   pre-existing debt lives in a file the maker never touched. But this goal
+   *requires* editing `app.py` (its import of the moved module), and `app.py`
+   already carried an unrelated duplicate `import os` (F811/F401). So `app.py`
+   was legitimately in scope, and its pre-existing debt failed the gate every
+   time — before `bdd_gate` ever got to confirm the BDD scenarios the maker
+   kept (correctly) saying passed. **Fixed** with a differential check: ruff
+   now runs with `--output-format json` on the changed files, and separately
+   on their **baseline (HEAD) versions** (materialised into a temp dir via a
+   new `worktree.file_at_baseline()`), and only findings the maker
+   *introduced this run* — compared per `(relative-path, rule-code)` so line
+   shifts from the edit don't matter — fail the gate. Pre-existing findings
+   are forgiven; a genuinely new problem (or any finding in a brand-new file,
+   which has no baseline) still fails. Falls back to the old opaque rc check
+   if ruff's json can't be parsed, so a broken invocation fails safe rather
+   than silently passing. New helpers: `_run_ruff_json`, `_ruff_new_findings`,
+   `_render_ruff_findings` in engine.py.
+2. **The panel crashed with `UnicodeDecodeError` reading the report.**
+   `report.py` writes the run report as utf-8 (it contains em-dashes, arrows,
+   the ✅/⏸️ glyphs), but `ui/coding_engineer_panel.py` read it back with a
+   bare `Path.read_text()`, which uses the platform default encoding — cp1252
+   on the user's Windows machine — and blew up on the first non-latin-1 byte.
+   The escalation itself was already handled gracefully; it was only the
+   *display* of the resulting report that crashed. **Fixed** by pinning
+   `read_text(encoding="utf-8")` (the only production `read_text()` without an
+   explicit encoding; the rest are in tests).
+
+**Verified:** two new engine tests —
+`test_self_check_forgives_preexisting_lint_debt` (ships `helper.py` with a
+duplicate `import os`, has the mocked maker implement the kata *and* append a
+line to `helper.py`, asserts the run finishes `done` because the pre-existing
+F811/F401 are forgiven) and `test_self_check_fails_on_newly_introduced_finding`
+(maker writes a working calculator but with a new unused `import sys`; asserts
+the run escalates and the report's ruff output names `F401` — proving the gate
+still blocks on introduced debt, i.e. the fix doesn't just disable the check).
+Full suite: 55/55 pass. Ruff clean (`--select E9,F` and default). **Still not
+verified:** a fifth live run — but the differential logic is exercised in both
+directions by the new tests against real ruff/git subprocesses, and the
+encoding crash was a deterministic platform-encoding bug with an unambiguous
+fix.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

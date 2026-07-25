@@ -50,6 +50,7 @@ from coding_agent.tools.worktree import WorktreeHandle, create_worktree
 from coding_agent.tools.worktree import changed_files as worktree_changed_files
 from coding_agent.tools.worktree import commit as worktree_commit
 from coding_agent.tools.worktree import diff as worktree_diff
+from coding_agent.tools.worktree import file_at_baseline as worktree_file_at_baseline
 
 DEFAULT_BUDGETS: dict[str, int] = {
     "max_attempts_per_plan": 3,
@@ -473,34 +474,144 @@ def _harness_exclude_dirs(worktree_dir: Path) -> list[str]:
     return ["coding_agent"] if (worktree_dir / "coding_agent").is_dir() else []
 
 
+def _run_ruff_json(files: list[str], cwd: Path, harness_excludes: list[str], timeout: int):
+    """Run `ruff check --select E9,F --output-format json` on `files`
+    (relative to `cwd`) and return (findings, raw_result). `findings` is the
+    parsed JSON list, or None if ruff's output couldn't be parsed (caller
+    should then fall back to an opaque rc check). Empty list == clean.
+
+    `--select E9,F` (syntax errors + pyflakes) rather than bare `ruff check`:
+    self_check runs against an arbitrary target worktree whose own ruff config
+    we don't control and shouldn't depend on -- an explicit, minimal, always-
+    the-same selection keeps this a fast correctness check, not a style audit.
+    """
+    if not files:
+        return [], None
+    result = run_command(
+        "ruff",
+        ["check", *files, "--select", "E9,F", "--output-format", "json",
+         *[f"--extend-exclude={d}" for d in harness_excludes]],
+        cwd=cwd,
+        timeout_s=timeout,
+    )
+    if result.timed_out:
+        return None, result
+    try:
+        findings = json.loads(result.stdout) if result.stdout.strip() else []
+    except json.JSONDecodeError:
+        return None, result
+    return findings, result
+
+
+def _ruff_new_findings(worktree_dir: Path, changed: list[str], handle: WorktreeHandle,
+                       harness_excludes: list[str], timeout: int):
+    """E9,F ruff findings the maker *introduced this run* -- current findings
+    on the changed files, minus those already present in each file at the run's
+    baseline (HEAD), compared per (relative-path, rule-code) so line shifts from
+    the edit don't matter. Files the maker newly created have no baseline, so
+    every finding in them counts (a brand-new file should be clean).
+
+    Why this exists: scoping ruff to changed files (previous fix) still gated on
+    pre-existing debt whenever the maker legitimately had to touch a file that
+    already carried it -- the live run escalated 4x because app.py's import line
+    genuinely needed updating for the module move, and app.py already had an
+    unrelated duplicate `import os` (F811). The maker reported "all 6 BDD
+    scenarios pass" every attempt, but self_check blocked before bdd_gate could
+    confirm it. Forgiving pre-existing findings fixes that while still catching
+    anything the maker actually breaks.
+
+    Returns (new_findings, current_result). new_findings is None if ruff output
+    couldn't be parsed at all (caller falls back to opaque rc)."""
+    import tempfile
+    from collections import Counter
+
+    current, current_result = _run_ruff_json(changed, worktree_dir, harness_excludes, timeout)
+    if current is None:
+        return None, current_result
+    if not current:
+        return [], current_result
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        baseline_files: list[str] = []
+        for rel in changed:
+            content = worktree_file_at_baseline(handle, rel)
+            if content is None:
+                continue  # new file this run -> no baseline; its findings all count
+            dest = tmp_path / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(content, encoding="utf-8")
+            baseline_files.append(rel)
+        baseline, _ = _run_ruff_json(baseline_files, tmp_path, [], timeout)
+        baseline = baseline or []
+
+    def _key(finding: dict, root: Path) -> tuple[str, str]:
+        fname = finding.get("filename", "")
+        try:
+            rel = os.path.relpath(fname, root)
+        except ValueError:
+            rel = fname
+        return (rel.replace(os.sep, "/"), finding.get("code") or "")
+
+    baseline_counts = Counter(_key(f, tmp_path) for f in baseline)
+    seen: Counter = Counter()
+    new: list[dict] = []
+    for f in current:
+        k = _key(f, worktree_dir)
+        seen[k] += 1
+        if seen[k] > baseline_counts.get(k, 0):
+            new.append(f)
+    return new, current_result
+
+
+def _render_ruff_findings(findings: list[dict]) -> str:
+    """One line per finding for the run report (json output isn't human-facing)."""
+    if not findings:
+        return ""
+    lines = []
+    for f in findings:
+        loc = f.get("location") or {}
+        rel = f.get("filename", "?")
+        lines.append(f"{rel}:{loc.get('row', '?')}:{loc.get('column', '?')} {f.get('code')} {f.get('message', '')}")
+    return "\n".join(lines)
+
+
 def self_check_node(state: CodingLoopState) -> dict:
     worktree_dir = Path(state["worktree_dir"])
     timeout = state["budgets"]["cmd_timeout_s"]
     harness_excludes = _harness_exclude_dirs(worktree_dir)
 
-    # Scope ruff to files actually changed this run, not the whole worktree.
-    # Bug found on the first real self-hosted run: an unscoped `ruff check .`
-    # failed 4/4 attempts on a pre-existing duplicate `import os` in app.py --
-    # a file the maker never touched, unrelated to the goal. A target repo
-    # the goal doesn't touch everywhere in can easily have lint debt
-    # elsewhere; that shouldn't gate a change that has nothing to do with it.
+    # Scope ruff to files changed this run AND only fail on findings this run
+    # introduced (see _ruff_new_findings for the full why). Two live-run bugs
+    # drove this: (1) an unscoped `ruff check .` failed on pre-existing debt in
+    # files the maker never touched; (2) scoping to changed files still failed
+    # on pre-existing debt in a file the maker legitimately *had* to touch
+    # (app.py's import line). Differential-vs-baseline forgives both.
     handle = _handle_from_state(state)
     changed = [p for p in worktree_changed_files(handle) if (worktree_dir / p).exists() and p.endswith(".py")]
-    ruff_targets = changed or ["."]  # nothing changed yet (shouldn't normally happen post-code) -> old behaviour
 
-    # `--select E9,F` (pyflakes + syntax errors) rather than bare `ruff check`:
-    # self_check runs against an arbitrary target worktree whose own ruff
-    # config (if any) we don't control and shouldn't depend on -- ruff's
-    # config auto-discovery can pick up unrelated rule sets (or, on some
-    # filesystems, flag things like EXE002 off the executable bit that have
-    # nothing to do with code correctness). An explicit, minimal, always-the-same
-    # selection keeps this gate a fast correctness check, not a style audit.
-    ruff_result = run_command(
-        "ruff",
-        ["check", *ruff_targets, "--select", "E9,F", *[f"--extend-exclude={d}" for d in harness_excludes]],
-        cwd=worktree_dir,
-        timeout_s=timeout,
-    )
+    new_findings, ruff_result = _ruff_new_findings(worktree_dir, changed, handle, harness_excludes, timeout)
+    if new_findings is None:
+        # Couldn't parse ruff's json (or it timed out) -> fall back to an opaque
+        # rc check on the changed files, so a broken ruff invocation fails safe
+        # rather than silently passing.
+        fallback = run_command(
+            "ruff",
+            ["check", *(changed or ["."]), "--select", "E9,F", *[f"--extend-exclude={d}" for d in harness_excludes]],
+            cwd=worktree_dir,
+            timeout_s=timeout,
+        )
+        ruff_returncode = fallback.returncode
+        ruff_stdout = fallback.stdout
+        ruff_stderr = fallback.stderr
+        ruff_timed_out = fallback.timed_out
+        ruff_passed = fallback.returncode == 0 and not fallback.timed_out
+    else:
+        ruff_returncode = 1 if new_findings else 0
+        ruff_stdout = _render_ruff_findings(new_findings)
+        ruff_stderr = ruff_result.stderr if ruff_result else ""
+        ruff_timed_out = ruff_result.timed_out if ruff_result else False
+        ruff_passed = not new_findings
 
     ignore_args: list[str] = []
     for feature_path in state.get("feature_paths", []):
@@ -522,14 +633,14 @@ def self_check_node(state: CodingLoopState) -> dict:
     # tests in scope ARE the frozen BDD scenarios (self_check ignores them;
     # bdd_gate is the node responsible for actually finding and running them).
     pytest_ok = pytest_result.returncode in (0, 5) and not pytest_result.timed_out
-    passed = ruff_result.returncode == 0 and not ruff_result.timed_out and pytest_ok
+    passed = ruff_passed and pytest_ok
 
     test_report = {
         "ruff": {
-            "returncode": ruff_result.returncode,
-            "stdout": ruff_result.stdout,
-            "stderr": ruff_result.stderr,
-            "timed_out": ruff_result.timed_out,
+            "returncode": ruff_returncode,
+            "stdout": ruff_stdout,
+            "stderr": ruff_stderr,
+            "timed_out": ruff_timed_out,
         },
         "pytest": {
             "returncode": pytest_result.returncode,

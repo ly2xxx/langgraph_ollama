@@ -95,6 +95,11 @@ def render_coding_engineer_panel() -> None:
     report_path = Path(_loop_state_dir()) / "state" / "coding-engineer" / run_id / "run-report.md"
     if report_path.exists():
         with st.expander("Run report", expanded=True):
-            st.markdown(report_path.read_text())
+            # encoding="utf-8" is not optional here: the report contains
+            # em-dashes/arrows/emoji, and report.py writes it as utf-8, but
+            # Path.read_text() defaults to the platform encoding -- cp1252 on
+            # Windows -- which raises UnicodeDecodeError on those bytes. Seen
+            # live as a crash in the panel after an escalated run.
+            st.markdown(report_path.read_text(encoding="utf-8"))
     else:
         st.warning(f"No report found at {report_path}")

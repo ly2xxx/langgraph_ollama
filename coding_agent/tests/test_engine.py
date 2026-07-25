@@ -415,3 +415,59 @@ def test_author_bdd_excludes_nested_coding_agent_dir(kata_target, monkeypatch):
     assert final["status"] == "done"
     assert final["feature_paths"] == ["features/calculator.feature"]
     assert not any("coding_agent" in p for p in final["feature_paths"])
+
+
+# -- self_check ruff: forgive pre-existing debt, catch newly-introduced --
+
+
+def test_self_check_forgives_preexisting_lint_debt(kata_target, monkeypatch):
+    """The exact bug that escalated the first real POC run 4x: self_check must
+    not fail on lint debt that already existed in a file the maker legitimately
+    had to touch. helper.py ships with a duplicate `import os` (F811/F401); the
+    maker implements the kata AND appends a line to helper.py (as it would when,
+    e.g., updating an import). The pre-existing findings are forgiven because
+    they're present at the baseline too; BDD passes; the run finishes done."""
+    (kata_target / "helper.py").write_text(
+        "import os\nimport os\n\n\ndef helper():\n    return 1\n"
+    )
+
+    _mock_suitable_intake(monkeypatch)
+
+    def fake_run_maker(llm, jail, state):
+        jail.write_file("calculator.py", CORRECT_CALCULATOR)
+        jail.write_file("helper.py", jail.read_file("helper.py") + "\n# touched by maker\n")
+        return {"output": "implemented kata; also touched helper.py"}
+
+    monkeypatch.setattr("coding_agent.engine._run_maker", fake_run_maker)
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-forgive-1")
+
+    assert final["status"] == "done"
+    assert final["test_report"]["passed"] is True
+
+
+def test_self_check_fails_on_newly_introduced_finding(kata_target, monkeypatch):
+    """The flip side: a finding the maker *introduces* still fails self_check.
+    The maker writes a working calculator but with an unused `import sys` (F401)
+    that wasn't in the baseline stub -- correct behaviour, new lint debt. It
+    keeps writing the same file, so the run escalates, proving the gate blocks
+    on the introduced finding rather than letting it through."""
+    _mock_suitable_intake(monkeypatch)
+    dirty_calc = "import sys\n" + CORRECT_CALCULATOR  # unused import -> F401, not in baseline
+
+    def fake_run_maker(llm, jail, state):
+        jail.write_file("calculator.py", dirty_calc)
+        return {"output": "implemented kata (with an unused import)"}
+
+    monkeypatch.setattr("coding_agent.engine._run_maker", fake_run_maker)
+
+    final = _invoke(
+        kata_target,
+        "Implement the string-calculator kata.",
+        "run-newfinding-1",
+        budgets={"max_attempts_per_plan": 2, "max_total_attempts": 2},
+    )
+
+    assert final["status"] == "escalated"
+    assert final["test_report"]["passed"] is False
+    assert "F401" in (final["test_report"]["ruff"]["stdout"] or "")
