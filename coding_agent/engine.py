@@ -51,6 +51,7 @@ from coding_agent.tools.worktree import changed_files as worktree_changed_files
 from coding_agent.tools.worktree import commit as worktree_commit
 from coding_agent.tools.worktree import diff as worktree_diff
 from coding_agent.tools.worktree import file_at_baseline as worktree_file_at_baseline
+from coding_agent.tools.worktree import renamed_paths as worktree_renamed_paths
 
 DEFAULT_BUDGETS: dict[str, int] = {
     "max_attempts_per_plan": 3,
@@ -484,13 +485,22 @@ def _run_ruff_json(files: list[str], cwd: Path, harness_excludes: list[str], tim
     self_check runs against an arbitrary target worktree whose own ruff config
     we don't control and shouldn't depend on -- an explicit, minimal, always-
     the-same selection keeps this a fast correctness check, not a style audit.
+
+    `--per-file-ignores __init__.py:F401`: a package __init__.py that re-exports
+    names (`from .mod import Thing`) trips F401 "imported but unused" -- but that
+    IS the file's purpose, and it's a brand-new file with no baseline to forgive
+    it against, so without this exception a maker creating a re-exporting package
+    (exactly what the RAG POC does with rag_agent/__init__.py) would fail
+    self_check on the single most conventional line in Python packaging. Scoped
+    to F401 in __init__.py only; genuine syntax errors and other pyflakes issues
+    there are still caught.
     """
     if not files:
         return [], None
     result = run_command(
         "ruff",
-        ["check", *files, "--select", "E9,F", "--output-format", "json",
-         *[f"--extend-exclude={d}" for d in harness_excludes]],
+        ["check", *files, "--select", "E9,F", "--per-file-ignores", "__init__.py:F401",
+         "--output-format", "json", *[f"--extend-exclude={d}" for d in harness_excludes]],
         cwd=cwd,
         timeout_s=timeout,
     )
@@ -531,13 +541,21 @@ def _ruff_new_findings(worktree_dir: Path, changed: list[str], handle: WorktreeH
     if not current:
         return [], current_result
 
+    # A moved file has no blob at its new path in HEAD; without this its
+    # (pre-existing) content would all read as newly introduced. renamed_paths
+    # lets us look the baseline up at the file's OLD path instead. Written into
+    # tmp under the NEW path so the (relative-path, code) comparison key lines
+    # up with the current findings.
+    renames = worktree_renamed_paths(handle)
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         baseline_files: list[str] = []
         for rel in changed:
             content = worktree_file_at_baseline(handle, rel)
+            if content is None and rel in renames:
+                content = worktree_file_at_baseline(handle, renames[rel])
             if content is None:
-                continue  # new file this run -> no baseline; its findings all count
+                continue  # genuinely new file this run -> no baseline; its findings all count
             dest = tmp_path / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(content, encoding="utf-8")
@@ -597,7 +615,8 @@ def self_check_node(state: CodingLoopState) -> dict:
         # rather than silently passing.
         fallback = run_command(
             "ruff",
-            ["check", *(changed or ["."]), "--select", "E9,F", *[f"--extend-exclude={d}" for d in harness_excludes]],
+            ["check", *(changed or ["."]), "--select", "E9,F", "--per-file-ignores", "__init__.py:F401",
+             *[f"--extend-exclude={d}" for d in harness_excludes]],
             cwd=worktree_dir,
             timeout_s=timeout,
         )

@@ -12,6 +12,8 @@ from coding_agent.tools.worktree import (
     commit,
     create_worktree,
     diff,
+    file_at_baseline,
+    renamed_paths,
 )
 
 
@@ -90,6 +92,28 @@ def test_create_worktree_from_non_git_target_falls_back(tmp_path, loop_state_dir
 
     cleanup(handle)
     assert not handle.worktree_dir.exists()
+
+
+def test_renamed_paths_detects_a_move(git_target, loop_state_dir):
+    """A file moved verbatim shows up as new_path -> old_path, and its content
+    is still reachable at the OLD path via file_at_baseline -- the two pieces
+    self_check relies on to forgive pre-existing lint debt in a moved file."""
+    handle = create_worktree(git_target, "run-rename", loop_state_dir)
+    (handle.worktree_dir / "mod.py").write_text("import os\n\n\ndef f():\n    return 1\n")
+    commit(handle, "add mod.py")
+
+    # relocate mod.py -> pkg/mod.py, verbatim
+    pkg = handle.worktree_dir / "pkg"
+    pkg.mkdir()
+    (pkg / "mod.py").write_text((handle.worktree_dir / "mod.py").read_text())
+    (handle.worktree_dir / "mod.py").unlink()
+
+    renames = renamed_paths(handle)
+    assert renames.get("pkg/mod.py") == "mod.py"
+    # no baseline at the new path, but the old path still resolves.
+    assert file_at_baseline(handle, "pkg/mod.py") is None
+    assert "import os" in (file_at_baseline(handle, "mod.py") or "")
+    cleanup(handle)
 
 
 def test_duplicate_run_id_raises(git_target, loop_state_dir):

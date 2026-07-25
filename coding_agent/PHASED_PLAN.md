@@ -470,6 +470,61 @@ fix.
 
 ---
 
+## Phase 1 follow-up — differential ruff missed two cases: moved files & re-export __init__.py ✅
+
+Fifth live run. The UI crash was gone (report displayed fine) and the maker
+again reported success every attempt ("All 7 BDD scenarios pass"), but
+self_check *still* failed 4x. The differential-ruff fix from the previous
+round was correct in principle but had two blind spots, both specific to the
+exact shape of a "move a module into a new package" goal:
+
+1. **A moved file has no baseline at its NEW path.** The differential looked
+   up each changed file's baseline via `git show HEAD:<current_path>`. For
+   `rag_agent/rag_research_chatbot.py` — moved from the repo root — there's no
+   blob at that path in HEAD, so the lookup returned nothing and *every*
+   pyflakes finding in the relocated file (the original file carried some)
+   read as "introduced this run". **Fixed** with rename detection: new
+   `worktree.renamed_paths()` runs `git diff --name-status -M HEAD` (with
+   intent-to-add so the uncommitted move is visible) and returns a
+   `new_path -> old_path` map; `_ruff_new_findings` now falls back to the
+   file's content at its OLD path when the new path has no baseline. Confirmed
+   in a scratch repo first (`git show HEAD:pkg/mod.py` fails but
+   `git diff --name-status -M HEAD` reports `R100 mod.py pkg/mod.py`).
+2. **A new re-export `__init__.py` legitimately trips F401.** `rag_agent/__init__.py`
+   is brand-new (no baseline, not a rename), and if it re-exports the class
+   (`from rag_agent.rag_research_chatbot import RAGResearchChatbot`) ruff flags
+   F401 "imported but unused" — even though re-exporting is the file's whole
+   purpose. **Fixed** by adding `--per-file-ignores __init__.py:F401` to
+   self_check's ruff invocation (both the json path and the opaque fallback).
+   Scoped to F401 in `__init__.py` only — the single most conventional line in
+   Python packaging — so syntax errors and other pyflakes issues there are
+   still caught.
+
+**Why this kept recurring:** each round fixed the *class* of "self_check gates
+on something unrelated to the change" but the move-a-module goal keeps
+surfacing new instances — whole-worktree scope (round 3), debt in a
+touched-but-not-moved file (round 4), debt in a moved file and a re-export
+`__init__.py` (this round). With rename-awareness and the `__init__.py`
+convention handled, the differential now covers every file category a move
+produces: modified-in-place (baseline at same path), moved (baseline at old
+path), and genuinely-new (no baseline, must be clean — except the F401
+`__init__.py` convention).
+
+**Verified:** two new engine tests —
+`test_self_check_forgives_lint_debt_in_a_moved_file` (ships `legacy.py` with an
+unused import, has the maker relocate it verbatim into `pkg/`, asserts the run
+finishes `done`) and `test_self_check_allows_reexport_init_py` (maker adds a
+re-exporting `pkg/__init__.py`, asserts `done`) — plus a worktree unit test
+`test_renamed_paths_detects_a_move`. The round-4
+`test_self_check_fails_on_newly_introduced_finding` still passes, confirming
+the gate still blocks genuinely new debt. Full suite: 58/58 pass. Ruff clean
+(`--select E9,F` and default). **Not yet verified:** a sixth live run — but
+every file category the POC produces is now exercised by a test against real
+ruff/git subprocesses, and the two gaps were each reproduced deterministically
+before fixing.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

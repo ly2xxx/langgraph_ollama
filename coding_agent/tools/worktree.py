@@ -144,6 +144,35 @@ def file_at_baseline(handle: WorktreeHandle, rel_path: str) -> str | None:
     return result.stdout
 
 
+def renamed_paths(handle: WorktreeHandle) -> dict[str, str]:
+    """Map of new_path -> old_path for files git detects as renamed since the
+    run's baseline (HEAD). Rename detection (`-M`) plus intent-to-add so a
+    file the maker just moved but hasn't committed is seen.
+
+    Why self_check needs this: a moved file has no blob at its NEW path in
+    HEAD, so a naive `git show HEAD:<new_path>` baseline lookup returns
+    nothing and every lint finding in the moved file looks 'introduced this
+    run' -- even though the content is a pre-existing file relocated
+    verbatim. The live POC escalated on exactly this: rag_research_chatbot.py
+    carried some pre-existing pyflakes debt, and once moved into rag_agent/
+    that debt failed self_check at the new path. With this map the caller can
+    fall back to the file's content at its OLD path for the comparison.
+    """
+    intent = _run_git(["add", "-A", "-N"], cwd=handle.worktree_dir)
+    if intent.returncode != 0:
+        raise WorktreeError(f"git add -N failed: {intent.stderr}")
+    result = _run_git(["diff", "--name-status", "-M", "HEAD"], cwd=handle.worktree_dir)
+    if result.returncode != 0:
+        raise WorktreeError(f"git diff --name-status failed: {result.stderr}")
+    mapping: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        parts = line.split("\t")
+        # Renames render as "R<similarity>\t<old>\t<new>" (e.g. "R100\ta\tb").
+        if parts and parts[0].startswith("R") and len(parts) >= 3:
+            mapping[parts[2]] = parts[1]
+    return mapping
+
+
 def commit(handle: WorktreeHandle, message: str) -> str:
     """Stage everything and commit. Returns the new commit hash, or ''
     if there was nothing to commit."""

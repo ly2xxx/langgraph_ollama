@@ -446,6 +446,59 @@ def test_self_check_forgives_preexisting_lint_debt(kata_target, monkeypatch):
     assert final["test_report"]["passed"] is True
 
 
+def test_self_check_forgives_lint_debt_in_a_moved_file(kata_target, monkeypatch):
+    """A moved file has no blob at its NEW path in HEAD, so without
+    rename-aware baseline lookup every finding in it reads as 'introduced
+    this run'. This was the actual escalation cause on the RAG POC:
+    rag_research_chatbot.py carried pre-existing pyflakes debt, and relocating
+    it into rag_agent/ made that debt fail self_check at the new path. Here
+    legacy.py ships with an unused import; the maker implements the kata and
+    relocates legacy.py verbatim into pkg/ -- the moved file's pre-existing
+    F401 must be forgiven via git rename detection."""
+    (kata_target / "legacy.py").write_text(
+        "import os  # unused, pre-existing\n\n\ndef legacy():\n    return 1\n"
+    )
+
+    _mock_suitable_intake(monkeypatch)
+
+    def fake_run_maker(llm, jail, state):
+        jail.write_file("calculator.py", CORRECT_CALCULATOR)
+        jail.write_file("pkg/legacy.py", jail.read_file("legacy.py"))  # verbatim relocate
+        jail.delete_file("legacy.py")
+        return {"output": "implemented kata; relocated legacy.py into pkg/"}
+
+    monkeypatch.setattr("coding_agent.engine._run_maker", fake_run_maker)
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-moved-debt-1")
+
+    assert final["status"] == "done"
+    assert final["test_report"]["passed"] is True
+
+
+def test_self_check_allows_reexport_init_py(kata_target, monkeypatch):
+    """A brand-new package __init__.py that re-exports a name trips F401
+    ('imported but unused') even though re-exporting is its entire purpose,
+    and being new it has no baseline to forgive it against. self_check must
+    tolerate F401 in __init__.py specifically -- this is exactly what the RAG
+    POC does (rag_agent/__init__.py re-exporting RAGResearchChatbot). The
+    maker here creates pkg/thing.py and a re-exporting pkg/__init__.py while
+    implementing the kata."""
+    _mock_suitable_intake(monkeypatch)
+
+    def fake_run_maker(llm, jail, state):
+        jail.write_file("calculator.py", CORRECT_CALCULATOR)
+        jail.write_file("pkg/thing.py", "class Thing:\n    pass\n")
+        jail.write_file("pkg/__init__.py", "from pkg.thing import Thing\n")  # F401 by default
+        return {"output": "implemented kata; added a re-exporting pkg/__init__.py"}
+
+    monkeypatch.setattr("coding_agent.engine._run_maker", fake_run_maker)
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-reexport-1")
+
+    assert final["status"] == "done"
+    assert final["test_report"]["passed"] is True
+
+
 def test_self_check_fails_on_newly_introduced_finding(kata_target, monkeypatch):
     """The flip side: a finding the maker *introduces* still fails self_check.
     The maker writes a working calculator but with an unused `import sys` (F401)
