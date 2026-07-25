@@ -65,6 +65,53 @@ class BddAuthorResult(BaseModel):
     )
 
 
+class PlanIdea(BaseModel):
+    """One candidate strategy from plan_tot's ToT propose step."""
+
+    steps: list[str] = Field(description="Ordered, concrete steps to satisfy the goal.")
+    rationale: str = Field(description="One or two sentences: why this approach, and its main risk.")
+
+
+class PlanProposal(BaseModel):
+    """plan_tot's propose step: k distinct candidate plans (primary role,
+    higher temperature). CODING_ENGINEER.md §3.6 ToT."""
+
+    plans: list[PlanIdea] = Field(description="Distinct candidate plans -- genuinely different approaches, not rewordings.")
+
+
+class PlanScore(BaseModel):
+    plan_index: int = Field(description="0-based index into the proposed plans list.")
+    score: float = Field(description="Composite 0-10: goal-fit, simplicity, risk, testability. Higher is better.")
+    reasoning: str = Field(description="One sentence justifying the score.")
+
+
+class PlanJudgement(BaseModel):
+    """plan_tot's evaluate step: the secondary-role judge scoring each proposed
+    plan (maker/checker split applied to planning). CODING_ENGINEER.md §3.6."""
+
+    scores: list[PlanScore] = Field(description="One score per proposed plan, by index.")
+
+
+class ReviewFinding(BaseModel):
+    location: str = Field(description="Where the problem is, as file:symbol or file:line.")
+    severity: str = Field(description="One of: blocker | major | minor. Only blocker/major can force a reject.")
+    rationale: str = Field(description="Why this is a problem -- especially a test that passes the letter but not the spirit.")
+    suggested_fix: str = Field(description="Concrete direction for the next attempt.")
+
+
+class ReviewVerdict(BaseModel):
+    """review (checker) output. CODING_ENGINEER.md §3.3: adversarial audit of
+    the diff vs the spec and step defs -- structured, never prose."""
+
+    verdict: str = Field(
+        description="One of: approve | approve_with_notes | reject. "
+        "reject ONLY if there is at least one blocker/major finding; minor-only findings -> approve_with_notes."
+    )
+    findings: list[ReviewFinding] = Field(
+        default_factory=list, description="Problems found. Empty for a clean approve."
+    )
+
+
 class DiagnosisResult(BaseModel):
     """diagnose's structured read of a failed attempt (CODING_ENGINEER.md §3.3).
     The failure_signature (§3.4) is computed in code from the traceback, NOT

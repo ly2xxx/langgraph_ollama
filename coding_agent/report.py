@@ -69,10 +69,31 @@ def render_report(state: dict[str, Any], outcome: str, commit_rev: str) -> str:
     lines.append(_fmt_list(state.get("feature_paths", [])))
     lines.append("")
 
+    plans = state.get("candidate_plans") or []
+    if plans:
+        lines.append("## Plans (ToT)")
+        active = state.get("active_plan_id")
+        for p in plans:
+            marker = " ← active" if p.get("id") == active else ""
+            lines.append(f"- **{p.get('id')}** [{p.get('status')}] score={p.get('score')}{marker}: {p.get('rationale', '')}")
+        lines.append("")
+
     lines.append("## Gate results")
     lines.append(f"- self_check passed: {test_report.get('passed')}")
     lines.append(f"- bdd_gate passed: {bdd_report.get('passed')}")
+    review = state.get("review_result") or {}
+    if review:
+        lines.append(f"- review verdict: {review.get('verdict')}")
     lines.append("")
+
+    findings = review.get("findings") or []
+    if findings:
+        lines.append("## Review findings")
+        for f in findings:
+            lines.append(f"- **{f.get('severity')}** {f.get('location')}: {f.get('rationale')}")
+            if f.get("suggested_fix"):
+                lines.append(f"  - fix: {f.get('suggested_fix')}")
+        lines.append("")
 
     # Added after the first live run: a boolean pass/fail plus a one-line
     # lesson summary wasn't enough to diagnose *why* a gate failed without

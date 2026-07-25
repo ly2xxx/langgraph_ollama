@@ -46,12 +46,23 @@ from coding_agent.prompts import (
     DIAGNOSE_PROMPT,
     INTAKE_PROMPT,
     MAKER_SYSTEM_PROMPT,
+    PLAN_JUDGE_PROMPT,
+    PLAN_PROPOSE_PROMPT,
+    REVIEW_PROMPT,
 )
 from coding_agent.report import stop_flag_set, write_run_report
-from coding_agent.schemas import BddAuthorResult, DiagnosisResult, TargetSpec
+from coding_agent.schemas import (
+    BddAuthorResult,
+    DiagnosisResult,
+    PlanJudgement,
+    PlanProposal,
+    ReviewVerdict,
+    TargetSpec,
+)
 from coding_agent.signatures import (
     compute_signature,
     extract_failures,
+    review_signature,
     signature_for_failure,
     template_message,
 )
@@ -136,7 +147,7 @@ class CodingLoopState(TypedDict, total=False):
     last_diff: str
     test_report: dict
     bdd_report: dict
-    review: dict | None
+    review_result: dict | None  # renamed from `review` -- can't share a name with the review node
     escalation_reason: str | None  # added in Phase 1 -- see module docstring
     # no-progress detection (Phase 2 -- CODING_ENGINEER.md §3.4)
     failure_signature: str | None  # this attempt's signature
@@ -198,6 +209,26 @@ def _read_failures(path: Path) -> list[dict]:
     return extract_failures(data)
 
 
+def _read_step_defs(state: CodingLoopState) -> str:
+    """Concatenate the step-definition files under the frozen feature dirs, for
+    the reviewer to audit for trivial-pass hacks (CODING_ENGINEER.md §3.3). The
+    maker wrote these under a frozen .feature file, so they're the likeliest
+    place a green run is actually cheating."""
+    worktree_dir = Path(state["worktree_dir"])
+    feature_dirs = {Path(fp).parent for fp in state.get("feature_paths", [])}
+    chunks: list[str] = []
+    for d in feature_dirs:
+        base = worktree_dir / d
+        if not base.exists():
+            continue
+        for py in sorted(base.rglob("*.py")):
+            try:
+                chunks.append(f"# {py.relative_to(worktree_dir)}\n{py.read_text(encoding='utf-8')}")
+            except OSError:
+                continue
+    return "\n\n".join(chunks) or "(no step definitions found)"
+
+
 def _summarize_failure(state: CodingLoopState) -> str:
     """Pure-code, no-LLM failure summary for the Phase 1 lesson log.
 
@@ -247,6 +278,55 @@ def _llm_diagnose(llm, state: CodingLoopState, phase: str, failure_detail: str) 
         goal=state["goal"], phase=phase, failure_detail=failure_detail, lessons=lesson_lines
     )
     return invoke_structured(llm, DiagnosisResult, prompt)
+
+
+def _lessons_block(state: CodingLoopState) -> str:
+    """Aggregated lessons for the ToT re-planning prompt (the GoT step) -- empty
+    on the first planning pass, populated once plans start dying."""
+    lessons = state.get("lessons") or []
+    if not lessons:
+        return ""
+    body = "\n".join(f"- ({ls.get('category')}) {ls.get('insight')}" for ls in lessons[-8:])
+    return f"\nLessons from earlier failed attempts (avoid repeating these):\n{body}\n"
+
+
+def _criteria_text(state: CodingLoopState) -> str:
+    criteria = (state.get("spec") or {}).get("acceptance_criteria", [])
+    return "\n".join(f"- {c}" for c in criteria) or "(none extracted)"
+
+
+def _llm_propose_plans(llm, state: CodingLoopState, k: int) -> PlanProposal:
+    prompt = PLAN_PROPOSE_PROMPT.format(
+        k=k, goal=state["goal"], acceptance_criteria=_criteria_text(state), lessons_block=_lessons_block(state)
+    )
+    return invoke_structured(llm, PlanProposal, prompt)
+
+
+def _llm_judge_plans(llm, state: CodingLoopState, plans: list[dict]) -> PlanJudgement:
+    plans_block = "\n".join(
+        f"[{i}] {p.get('rationale', '')}\n" + "\n".join(f"    - {s}" for s in p.get("steps", []))
+        for i, p in enumerate(plans)
+    )
+    prompt = PLAN_JUDGE_PROMPT.format(
+        goal=state["goal"],
+        acceptance_criteria=_criteria_text(state),
+        lessons_block=_lessons_block(state),
+        plans_block=plans_block,
+    )
+    return invoke_structured(llm, PlanJudgement, prompt)
+
+
+def _llm_review(llm, state: CodingLoopState) -> ReviewVerdict:
+    bdd = state.get("bdd_report") or {}
+    step_defs = _read_step_defs(state)
+    prompt = REVIEW_PROMPT.format(
+        goal=state["goal"],
+        acceptance_criteria=_criteria_text(state),
+        diff=(state.get("last_diff") or "(no diff)")[:6000],
+        step_defs=step_defs[:6000],
+        test_output=(bdd.get("stdout") or "(no output)")[:2000],
+    )
+    return invoke_structured(llm, ReviewVerdict, prompt)
 
 
 def _build_maker_tools(jail: Jail, budgets: Budgets) -> list:
@@ -479,17 +559,87 @@ def author_bdd_node(state: CodingLoopState) -> dict:
     }
 
 
-def plan_tot_node(state: CodingLoopState) -> dict:
-    """Phase 1: a single fixed plan, no LLM call. ToT propose/judge/select
-    and GoT lesson aggregation across plans are Phase 3 (CODING_ENGINEER.md §3.6)."""
-    plan: Plan = {
+def _fallback_plan() -> Plan:
+    return {
         "id": "plan-1",
         "steps": ["Implement the goal against the acceptance criteria; iterate using self_check/bdd_gate feedback."],
-        "rationale": "Phase 1 uses a single fixed plan -- see CODING_ENGINEER.md §3.6 for the Phase 3 upgrade.",
+        "rationale": "fallback single plan (propose/judge unavailable)",
         "score": 1.0,
-        "status": "active",
+        "status": "untried",
     }
-    return {"candidate_plans": [plan], "active_plan_id": plan["id"], "status": "coding"}
+
+
+def _score_plans(state: CodingLoopState, plans: list[Plan], exclude: set[str]) -> list[Plan]:
+    """Judge (secondary role, temperature 0) scores the not-yet-exhausted plans.
+    On re-entry the aggregated lessons ride along in the prompt -- the GoT step,
+    so a plan that would repeat a known dead end scores low. Degrades gracefully:
+    if the judge call fails, keep any existing scores and otherwise fall back to
+    proposal order (first proposed = best)."""
+    to_score = [p for p in plans if p["id"] not in exclude]
+    if not to_score:
+        return plans
+    secondary = get_llm("secondary", temperature=0.0)
+    try:
+        judgement = _llm_judge_plans(secondary, state, to_score)
+        by_index = {s.plan_index: s.score for s in judgement.scores}
+        for i, p in enumerate(to_score):
+            if i in by_index:
+                p["score"] = float(by_index[i])
+    except StructuredOutputError:
+        for i, p in enumerate(to_score):
+            if not p.get("score"):
+                p["score"] = float(len(to_score) - i)
+    return plans
+
+
+def plan_tot_node(state: CodingLoopState) -> dict:
+    """Tree-of-Thought planning (CODING_ENGINEER.md §3.6). First entry: the
+    primary model proposes k distinct plans (hot), the secondary-role judge
+    scores them (cold), and the best untried plan becomes active. Re-entry
+    (after diagnose retires a stalled plan): the surviving candidates are
+    RE-SCORED with the aggregated lessons in the prompt -- not regenerated --
+    and the next best untried plan is selected."""
+    budgets = state["budgets"]
+    k = budgets.get("max_plans", 3)
+    exhausted = set(state.get("exhausted_plan_ids") or [])
+    existing = list(state.get("candidate_plans") or [])
+
+    if not existing:
+        primary = get_llm("primary", temperature=0.8)
+        try:
+            proposal = _llm_propose_plans(primary, state, k)
+            existing = [
+                {"id": f"plan-{i + 1}", "steps": list(p.steps), "rationale": p.rationale, "score": 0.0,
+                 "status": "untried"}
+                for i, p in enumerate(proposal.plans)
+            ] or [_fallback_plan()]
+        except StructuredOutputError:
+            existing = [_fallback_plan()]
+
+    existing = _score_plans(state, existing, exclude=exhausted)
+
+    candidates = [p for p in existing if p["id"] not in exhausted]
+    if not candidates:  # defensive -- diagnose escalates before this can happen
+        return {
+            "candidate_plans": existing,
+            "status": "escalated",
+            "escalation_reason": "no_plans_left",
+            "diagnosis": {"action": "escalate"},
+        }
+
+    best = max(candidates, key=lambda p: p.get("score", 0.0))
+    for p in existing:
+        p["status"] = "active" if p["id"] == best["id"] else ("exhausted" if p["id"] in exhausted else "untried")
+
+    return {
+        "candidate_plans": existing,
+        "active_plan_id": best["id"],
+        "status": "coding",
+        "attempt": 0,  # each plan gets its own per-plan attempt budget
+        "messages": [
+            _status_message("plan_tot", True, note=f"selected {best['id']} (score {best.get('score', 0):.1f}) of {len(existing)}")
+        ],
+    }
 
 
 def code_node(state: CodingLoopState) -> dict:
@@ -504,6 +654,10 @@ def code_node(state: CodingLoopState) -> dict:
     return {
         "last_diff": diff_text,
         "status": "coding",
+        # A new attempt invalidates any prior review verdict -- clear it so
+        # diagnose (Phase 3) doesn't mistake a stale reject for this attempt's
+        # outcome when a later gate fails first.
+        "review_result": None,
         "messages": [_status_message("code", True, note=str(summary)[:200])],
     }
 
@@ -788,14 +942,55 @@ def bdd_gate_node(state: CodingLoopState) -> dict:
 
 
 def _route_after_bdd_gate(state: CodingLoopState) -> str:
-    return "finalize" if state["bdd_report"]["passed"] else "diagnose"
+    # Phase 3: a green bdd_gate no longer finalizes directly -- the adversarial
+    # reviewer (checker) gets the last word (CODING_ENGINEER.md §3.1/§3.3).
+    return "review" if state["bdd_report"]["passed"] else "diagnose"
+
+
+def review_node(state: CodingLoopState) -> dict:
+    """Adversarial checker (CODING_ENGINEER.md §3.3), always the secondary role
+    (§3.5) -- a different model catches more than a different prompt on the same
+    one. Sees the spec, diff, step defs, and (green) test output, NOT the maker's
+    reasoning, and specifically hunts trivial-pass hacks in the step defs.
+    reject requires a blocker/major finding; minor-only downgrades to
+    approve_with_notes (notes land in the report, run still finalizes)."""
+    if stop_flag_set(state["run_id"], _loop_state_dir()):
+        return {"status": "escalated", "escalation_reason": "stopped by user", "diagnosis": {"action": "escalate"}}
+
+    secondary = get_llm("secondary", temperature=0.0)
+    try:
+        verdict = _llm_review(secondary, state)
+    except StructuredOutputError:
+        # A review hiccup must not block an already-green run -> approve with a note.
+        verdict = ReviewVerdict(verdict="approve_with_notes", findings=[])
+
+    blocking = [f for f in verdict.findings if f.severity in ("blocker", "major")]
+    is_reject = verdict.verdict == "reject" and bool(blocking)
+    review = {
+        "verdict": "reject" if is_reject else ("approve_with_notes" if verdict.findings else "approve"),
+        "findings": [f.model_dump() for f in verdict.findings],
+        "blocking": [f.model_dump() for f in blocking],
+    }
+    note = f"{review['verdict']}" + (f" ({len(blocking)} blocking)" if blocking else "")
+    return {"review_result": review, "status": "testing", "messages": [_status_message("review", not is_reject, note=note)]}
+
+
+def _route_after_review(state: CodingLoopState) -> str:
+    review = state.get("review_result") or {}
+    return "diagnose" if review.get("verdict") == "reject" and review.get("blocking") else "finalize"
 
 
 _MAX_FLAKE_FREE_RETRIES = 2  # a genuinely flaky gate shouldn't spin forever on "free" retries
 
 
 def _failed_phase(state: CodingLoopState) -> str | None:
-    """Which gate failed this attempt (closed set, matches §3.4's `phase`)."""
+    """Which gate failed this attempt (closed set, matches §3.4's `phase`).
+    A review reject is only 'this attempt's' failure because code_node clears
+    the prior review at the start of every attempt, so a stale reject can't
+    shadow a later self_check/bdd_gate failure."""
+    review = state.get("review_result") or {}
+    if review.get("verdict") == "reject" and review.get("blocking"):
+        return "review"
     if not (state.get("test_report") or {}).get("passed", True):
         return "self_check"
     if not (state.get("bdd_report") or {}).get("passed", True):
@@ -816,6 +1011,18 @@ def _signature_and_detail(state: CodingLoopState, phase: str) -> tuple[str, str]
         codes = report.get("ruff_codes") or []
         detail = "ruff findings: " + (", ".join(codes) or ((report.get("ruff") or {}).get("stdout") or "")[:400])
         return compute_signature(phase, "ruff", "ruff", ",".join(sorted(codes)), ""), detail
+    if phase == "review":
+        review = state.get("review_result") or {}
+        blocking = review.get("blocking") or []
+        first = blocking[0] if blocking else {}
+        # A maker/checker stalemate is no-progress by another name (§3.4): sign the
+        # rejection by (location, severity) so a reviewer that keeps rejecting the
+        # same spot is caught by the same "same signature twice" rule.
+        sig = review_signature(first.get("location", ""), first.get("severity", ""))
+        detail = "review reject: " + "; ".join(
+            f"{f.get('severity')} {f.get('location')}: {f.get('rationale')}" for f in blocking[:3]
+        )
+        return sig, detail
     # bdd_gate
     report = state.get("bdd_report") or {}
     failures = report.get("failures") or []
@@ -894,22 +1101,42 @@ def diagnose_node(state: CodingLoopState) -> dict:
             "diagnosis": {"action": "escalate", "category": category, "signature": signature, "reason": reason},
         }
 
-    # 1-2. No progress: same signature twice -> active plan exhausted.
+    elapsed = time.time() - state.get("run_started_at", time.time())
+    hard_budget = None
+    if elapsed > budgets["wall_clock_s"]:
+        hard_budget = "wall_clock"
+    elif total_attempts > budgets["max_total_attempts"]:
+        hard_budget = "max_total_attempts"
+
+    # 1-2. No progress: same signature twice -> active plan exhausted. If another
+    # candidate plan remains (and no hard budget is breached), switch to it via
+    # plan_tot -- the aggregated lessons steer the re-score (GoT). Escalate once
+    # two plans have been exhausted (§3.4 exit 2: a third built on the same
+    # lessons lands in the same place) or nothing else is left.
     if no_progress:
         exhausted = list(state.get("exhausted_plan_ids", []))
         active = state.get("active_plan_id", "plan-1")
         if active not in exhausted:
             exhausted.append(active)
-        base = _escalate("two_plans_exhausted" if len(exhausted) >= 2 else "no_progress")
-        base["exhausted_plan_ids"] = exhausted
-        return base
+        remaining = [p for p in (state.get("candidate_plans") or []) if p.get("id") not in exhausted]
+        if len(exhausted) >= 2 or not remaining or hard_budget:
+            base = _escalate(hard_budget or ("two_plans_exhausted" if len(exhausted) >= 2 else "no_progress"))
+            base["exhausted_plan_ids"] = exhausted
+            return base
+        return {
+            "status": "planning",
+            "exhausted_plan_ids": exhausted,
+            "attempt": 0,  # the fresh plan gets its own per-plan attempt budget
+            "total_attempts": total_attempts,
+            "lessons": lessons,
+            "failure_signature": signature,
+            "prev_failure_signature": prev_signature,
+            "diagnosis": {"action": "new_plan", "category": category, "signature": signature},
+        }
 
     # 4. Budgets (token budget is a hard stop here when set; 0 means unlimited).
-    elapsed = time.time() - state.get("run_started_at", time.time())
-    if elapsed > budgets["wall_clock_s"]:
-        return _escalate("wall_clock")
-    if total_attempts > budgets["max_total_attempts"]:
-        return _escalate("max_total_attempts")
+    if hard_budget:
+        return _escalate(hard_budget)
     if attempt > budgets["max_attempts_per_plan"]:
         return _escalate("max_attempts_per_plan")
 
@@ -979,6 +1206,7 @@ def build_graph(checkpointer=None):
     graph.add_node("code", code_node)
     graph.add_node("self_check", self_check_node)
     graph.add_node("bdd_gate", bdd_gate_node)
+    graph.add_node("review", review_node)
     graph.add_node("diagnose", diagnose_node)
     graph.add_node("finalize", finalize_node)
     graph.add_node("escalate", escalate_node)
@@ -991,8 +1219,11 @@ def build_graph(checkpointer=None):
     graph.add_edge("plan_tot", "code")
     graph.add_edge("code", "self_check")
     graph.add_conditional_edges("self_check", _route_after_self_check, {"bdd_gate": "bdd_gate", "diagnose": "diagnose"})
-    graph.add_conditional_edges("bdd_gate", _route_after_bdd_gate, {"finalize": "finalize", "diagnose": "diagnose"})
-    graph.add_conditional_edges("diagnose", _route_after_diagnose, {"code": "code", "escalate": "escalate"})
+    graph.add_conditional_edges("bdd_gate", _route_after_bdd_gate, {"review": "review", "diagnose": "diagnose"})
+    graph.add_conditional_edges("review", _route_after_review, {"finalize": "finalize", "diagnose": "diagnose"})
+    graph.add_conditional_edges(
+        "diagnose", _route_after_diagnose, {"code": "code", "plan_tot": "plan_tot", "escalate": "escalate"}
+    )
     graph.add_edge("finalize", END)
     graph.add_edge("escalate", END)
 

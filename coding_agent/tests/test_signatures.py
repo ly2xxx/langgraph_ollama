@@ -7,6 +7,7 @@ from coding_agent.signatures import (
     compute_signature,
     extract_failures,
     normalise_test_name,
+    review_signature,
     signature_for_failure,
     template_message,
 )
@@ -94,6 +95,16 @@ def test_extract_failures_from_pytest_json_report():
 def test_extract_failures_empty_when_all_pass():
     assert extract_failures({"tests": [{"nodeid": "t::a", "outcome": "passed"}]}) == []
     assert extract_failures({}) == []
+
+
+def test_review_signature_distinguishes_location_and_severity():
+    a = review_signature("steps/test_x.py:add", "blocker")
+    b = review_signature("steps/test_x.py:add", "blocker")
+    c = review_signature("steps/test_x.py:sub", "blocker")
+    d = review_signature("steps/test_x.py:add", "major")
+    assert a == b  # same rejection twice -> caught by no-progress
+    assert a != c and a != d
+    assert len(a) == 40
 
 
 def test_compute_signature_is_deterministic_hex():

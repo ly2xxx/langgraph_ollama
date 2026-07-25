@@ -63,6 +63,37 @@ def kata_target(tmp_path, monkeypatch):
     return target
 
 
+@pytest.fixture(autouse=True)
+def _mock_phase3_llms(monkeypatch):
+    """Phase 3 added an LLM call in plan_tot (propose + judge) on every run and a
+    review call after every green bdd_gate. Default them to a single generic plan
+    and a clean approve so the many pre-Phase-3 tests -- which only care about the
+    loop mechanics -- don't each need to wire them up. Tests that specifically
+    exercise ToT planning or the reviewer override these."""
+    from coding_agent.schemas import (
+        PlanIdea,
+        PlanJudgement,
+        PlanProposal,
+        PlanScore,
+        ReviewVerdict,
+    )
+
+    monkeypatch.setattr(
+        "coding_agent.engine._llm_propose_plans",
+        lambda llm, state, k: PlanProposal(plans=[PlanIdea(steps=["implement the goal"], rationale="direct")]),
+    )
+    monkeypatch.setattr(
+        "coding_agent.engine._llm_judge_plans",
+        lambda llm, state, plans: PlanJudgement(
+            scores=[PlanScore(plan_index=i, score=float(len(plans) - i), reasoning="ok") for i in range(len(plans))]
+        ),
+    )
+    monkeypatch.setattr(
+        "coding_agent.engine._llm_review",
+        lambda llm, state: ReviewVerdict(verdict="approve", findings=[]),
+    )
+
+
 def _mock_suitable_intake(monkeypatch, acceptance_criteria=KATA_ACCEPTANCE_CRITERIA):
     def fake_parse(llm, goal, target_dir):
         return TargetSpec(
@@ -477,6 +508,112 @@ def test_killed_run_resumes_from_sqlite_checkpoint(kata_target, monkeypatch):
     resumed = build_graph(checkpointer=SqliteSaver(conn2)).invoke(Command(resume={"approved": True}), config=config)
     assert resumed["status"] == "done"
     conn2.close()
+
+
+# -- Phase 3: ToT planning + adversarial review ------------------------------
+
+
+def test_seeded_bad_plan_triggers_observable_plan_switch(kata_target, monkeypatch):
+    """§3.6 ToT + GoT: with two candidate plans, a stalling plan (identical
+    failure twice -> no-progress) is retired and the loop switches to the next
+    plan, which succeeds. The switch is observable in state (exhausted plan,
+    new active plan) and the report."""
+    from coding_agent.schemas import PlanIdea, PlanProposal
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_diagnose(monkeypatch, category="test-logic")
+    monkeypatch.setattr(
+        "coding_agent.engine._llm_propose_plans",
+        lambda llm, state, k: PlanProposal(
+            plans=[
+                PlanIdea(steps=["a doomed approach"], rationale="plan A (will stall)"),
+                PlanIdea(steps=["a working approach"], rationale="plan B"),
+            ]
+        ),
+    )
+
+    def fake_maker(llm, jail, state):
+        # plan-1 keeps producing the identical failure; plan-2 fixes it.
+        content = BROKEN_CALCULATOR if state.get("active_plan_id") == "plan-1" else CORRECT_CALCULATOR
+        jail.write_file("calculator.py", content)
+        return {"output": f"wrote under {state.get('active_plan_id')}"}
+
+    monkeypatch.setattr("coding_agent.engine._run_maker", fake_maker)
+
+    final = _invoke(
+        kata_target,
+        "Implement the string-calculator kata.",
+        "run-planswitch-1",
+        budgets={"max_attempts_per_plan": 5, "max_total_attempts": 9},
+    )
+
+    assert final["status"] == "done"
+    assert "plan-1" in final.get("exhausted_plan_ids", [])
+    assert final["active_plan_id"] == "plan-2"
+
+    report_text = _report_path("run-planswitch-1").read_text()
+    assert "Plans (ToT)" in report_text
+    assert "exhausted" in report_text
+
+
+def test_reviewer_rejects_trivial_pass_step_def(kata_target, monkeypatch):
+    """§3.3 checker: the automated gates pass, but the adversarial reviewer
+    rejects a blocking finding (e.g. a step def that asserts nothing) -- so the
+    run does NOT finalize. The identical rejection twice is a maker/checker
+    stalemate, caught by the same no-progress rule (§3.4)."""
+    from coding_agent.schemas import ReviewFinding, ReviewVerdict
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_diagnose(monkeypatch, category="design")
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])  # gates stay green every attempt
+    monkeypatch.setattr(
+        "coding_agent.engine._llm_review",
+        lambda llm, state: ReviewVerdict(
+            verdict="reject",
+            findings=[
+                ReviewFinding(
+                    location="features/steps/test_calculator_steps.py:add",
+                    severity="blocker",
+                    rationale="the step asserts nothing -- a trivial pass",
+                    suggested_fix="assert the real return value",
+                )
+            ],
+        ),
+    )
+
+    final = _invoke(
+        kata_target,
+        "Implement the string-calculator kata.",
+        "run-review-1",
+        budgets={"max_attempts_per_plan": 9, "max_total_attempts": 9},
+    )
+
+    assert final["status"] == "escalated"
+    assert final["escalation_reason"] == "no_progress"  # same rejection twice -> stalemate
+    assert final["review_result"]["verdict"] == "reject"
+
+    report_text = _report_path("run-review-1").read_text()
+    assert "review verdict: reject" in report_text
+    assert "asserts nothing" in report_text
+
+
+def test_judge_and_review_use_secondary_role(kata_target, monkeypatch):
+    """§3.5: the plan judge and the reviewer must run on the `secondary` role,
+    while proposing/coding stay on `primary` -- so a distinct
+    CODING_AGENT_SECONDARY_MODEL is actually exercised as the checker."""
+    _mock_suitable_intake(monkeypatch)
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])
+
+    roles: list[str] = []
+    monkeypatch.setattr("coding_agent.engine.get_llm", lambda role, **kw: roles.append(role) or object())
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-roles-1")
+
+    assert final["status"] == "done"
+    assert "secondary" in roles  # judge + review
+    assert "primary" in roles  # intake + propose + code
+    # the two secondary calls are the judge (plan_tot) and the reviewer.
+    assert roles.count("secondary") >= 2
 
 
 # -- tool arg-schema collisions (live-run fix) -------------------------------

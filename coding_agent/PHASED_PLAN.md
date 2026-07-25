@@ -655,26 +655,99 @@ one thing left to sanity-check live.
 
 ---
 
-## What's next — Phase 3
+## Phase 3 — ToT / GoT / adversarial checker ✅
 
-Per `CODING_ENGINEER.md` §6 / §3.6: the "intelligence" layer that the Phase 2
-rails were built to support.
+Phase 1 gave a working loop; Phase 2 gave it rails and memory. Phase 3 is the
+intelligence layer from §3.6 / §3.3: branch the search where it's cheap
+(planning), keep an independent checker at the end, and let failures on one
+plan inform the next.
 
-- **ToT/GoT planning** in `plan_tot`: the primary model proposes several
-  candidate plans, the secondary model judges/scores them, and the loop works
-  the best one — replacing today's single fixed `plan-1`. This is what finally
-  exercises the plan-switching path already wired into diagnose: on a
-  no-progress plan exhaustion, route to `plan_tot` for a fresh plan built on
-  the aggregated lessons, and only escalate on the **second** consecutive
-  exhaustion (§3.4 exit 2).
-- **Adversarial reviewer** (secondary model) after `bdd_gate` passes: an
-  independent maker/checker separation that can `reject` on blocker/major
-  findings. Review rejections get signed too — `review_signature(location,
-  severity)` already exists in `signatures.py` — so a maker/checker stalemate
-  is caught by the same no-progress rule (§3.4 exit 3).
-- **Cross-plan lesson aggregation** (GoT): carry distilled lessons across plan
-  switches so a new plan doesn't repeat a dead end.
+**Delivered:**
 
-Phase 4 then is the UI/observability polish (§5): budgets expander, diff
-viewer, demo queries, telemetry wiring, and the worktree-cleanup decision
-still open from the Phase 1 follow-ups.
+1. **Tree-of-Thought planning (`plan_tot`).** Replaced the single fixed
+   `plan-1` with propose/judge/select:
+   - *Propose*: primary model, temperature 0.8, `k = budgets.max_plans` (3)
+     distinct candidate plans (`PlanProposal` structured output).
+   - *Evaluate*: **secondary-role** judge, temperature 0, scores each plan on
+     goal-fit / simplicity / risk / testability (`PlanJudgement`) — the
+     maker/checker split applied to planning (the model that proposed a plan
+     isn't the one scoring it, when a distinct secondary is configured).
+   - *Select*: highest-scoring non-exhausted plan becomes active.
+   Degrades gracefully: if propose or judge can't be parsed, falls back to a
+   single plan / proposal-order scoring rather than crashing.
+2. **Graph-of-Thought re-planning.** On re-entry after a plan is retired,
+   `plan_tot` **re-scores the surviving candidates with the aggregated lessons
+   in the judge prompt** (`_lessons_block`) rather than regenerating them —
+   so insights from a dead branch steer the next choice. `diagnose`'s
+   no-progress exit now routes to `plan_tot` (action `new_plan`) when a
+   non-exhausted candidate remains, and only escalates `two_plans_exhausted`
+   once two plans have died (§3.4 exit 2) — the plan-switch path that was
+   wired-but-dormant in Phase 2 is now live.
+3. **Adversarial reviewer (`review`).** A new node between a green `bdd_gate`
+   and `finalize`, always the **secondary role** (§3.5). It sees the spec,
+   diff, step-definition files, and the (green) test output — not the maker's
+   reasoning — and specifically hunts trivial-pass hacks in the step defs the
+   maker wrote under the frozen `.feature` file. `ReviewVerdict` /
+   `ReviewFinding` structured output; `reject` requires a blocker/major
+   finding (minor-only downgrades to `approve_with_notes` and still
+   finalizes). A reject routes to `diagnose`, where the rejection is signed
+   with `review_signature(location, severity)` — so a maker/checker stalemate
+   (the same rejection twice) is caught by the very same no-progress rule as
+   a flapping test (§3.4 exit 3). `code_node` clears the prior verdict at the
+   start of each attempt so a stale reject can't shadow a later gate failure.
+4. **Report** now shows the ToT plan list (id / status / score / active
+   marker), the review verdict, and any review findings with suggested fixes.
+
+**State/schema/topology changes.** New schemas `PlanIdea`/`PlanProposal`,
+`PlanScore`/`PlanJudgement`, `ReviewFinding`/`ReviewVerdict`. New prompts
+`PLAN_PROPOSE_PROMPT`, `PLAN_JUDGE_PROMPT`, `REVIEW_PROMPT`. The `review` state
+field had to be renamed `review_result` — langgraph forbids a node and a state
+key sharing a name, and the node is called `review`. `bdd_gate` now routes to
+`review` (not `finalize`); `diagnose` gained the `plan_tot` route.
+
+**Verified (real ruff/pytest/git; the six LLM boundaries mocked):**
+- `test_seeded_bad_plan_triggers_observable_plan_switch` — two candidate
+  plans; plan-1 stalls (identical failure twice), the loop retires it and
+  switches to plan-2, which succeeds. `exhausted_plan_ids` contains `plan-1`,
+  the active plan is `plan-2`, and the switch shows in the report.
+- `test_reviewer_rejects_trivial_pass_step_def` — gates green, but the
+  reviewer rejects a blocking finding, so the run does NOT finalize; the
+  identical rejection twice escalates as `no_progress` (the maker/checker
+  stalemate rule).
+- `test_judge_and_review_use_secondary_role` — spying on `get_llm` confirms
+  the judge and reviewer run on `secondary` while intake/propose/code stay on
+  `primary` (so a distinct `CODING_AGENT_SECONDARY_MODEL` is actually
+  exercised as the checker — the §6 Phase-3 acceptance criterion).
+- `test_signatures.py` gained a `review_signature` case. The pre-Phase-3
+  integration tests keep passing via one autouse fixture that defaults the new
+  propose/judge/review calls to a single plan + clean approve, so only the
+  tests that actually care about planning/review wire them up.
+
+Full `coding_agent` suite: **79 pass** (27 engine + 52 unit), ruff clean
+(`--select E9,F` and default). The graph the panel renders now includes the
+`review` node automatically (it just calls `build_graph()`).
+
+**Not yet verified live:** the real ToT propose/judge and the reviewer against
+Ollama — as with every phase, the sandbox has no model, so the actual planner
+and checker prompts are the piece left to sanity-check on a live run. A
+distinct `CODING_AGENT_SECONDARY_MODEL` is worth setting for that run to see
+the checker diversity the design is built around.
+
+---
+
+## What's next — Phase 4
+
+Per `CODING_ENGINEER.md` §5 / §6: UI & observability polish, now that the loop
+itself is feature-complete.
+
+- **app.py / panel**: budgets expander in the sidebar, a diff viewer for the
+  produced branch, a verdict banner, `DEMO_QUERIES` entry, and wrapping the
+  run in `telemetry.track_request(CODING_ENGINEER, model)` with per-node
+  `record_tokens` — which is also what makes the Phase 3 "judge + review use
+  the secondary model" visible as telemetry spans, not just a unit assertion.
+- **Token budget**: `budgets.token_budget` is enforced as a hard stop in
+  diagnose but nothing tallies tokens yet — wire `telemetry.extract_token_usage`
+  so the tally is real.
+- **Worktree cleanup**: still-open decision from the Phase 1 follow-ups —
+  auto-remove finished-run worktrees vs. keep them for inspection (currently
+  they persist under `.loop/worktrees/`).
