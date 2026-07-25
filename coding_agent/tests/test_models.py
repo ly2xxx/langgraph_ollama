@@ -5,7 +5,7 @@ never `.invoke()`. See CODING_ENGINEER.md §3.5."""
 
 import pytest
 
-from coding_agent.models import UnknownProviderError, describe, get_llm
+from coding_agent.models import UnknownProviderError, describe, describe_all, get_llm
 
 
 @pytest.fixture(autouse=True)
@@ -63,6 +63,14 @@ def test_get_llm_secondary_can_diverge_from_primary(monkeypatch):
     secondary = get_llm("secondary")
     assert primary.model == "model-a"
     assert secondary.model == "model-b"
+
+
+def test_describe_all_reports_both_roles(monkeypatch):
+    monkeypatch.setenv("CODING_AGENT_PRIMARY_MODEL", "primary-model")
+    monkeypatch.setenv("CODING_AGENT_SECONDARY_MODEL", "secondary-model")
+    info = describe_all()
+    assert info["primary"]["model"] == "primary-model"
+    assert info["secondary"]["model"] == "secondary-model"
 
 
 def test_unknown_provider_raises(monkeypatch):

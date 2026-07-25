@@ -53,6 +53,14 @@ def render_report(state: dict[str, Any], outcome: str, commit_rev: str) -> str:
     lines.append(f"- **Attempts:** {state.get('total_attempts', 0)} (budget: {budgets.get('max_total_attempts', '?')})")
     lines.append("")
 
+    model_info = state.get("model_info") or {}
+    if model_info:
+        lines.append("## Models")
+        for role in ("primary", "secondary"):
+            cfg = model_info.get(role) or {}
+            lines.append(f"- **{role}:** provider={cfg.get('provider')} model={cfg.get('model')} base_url={cfg.get('base_url')}")
+        lines.append("")
+
     lines.append("## Acceptance criteria")
     lines.append(_fmt_list(spec.get("acceptance_criteria", [])))
     lines.append("")

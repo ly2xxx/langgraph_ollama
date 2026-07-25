@@ -13,6 +13,7 @@ from pathlib import Path
 import streamlit as st
 
 from coding_agent.engine import _loop_state_dir, build_graph, new_run_id, stream_run
+from coding_agent.models import describe_all
 from ui.graph_display import render_graph_diagram
 
 
@@ -53,6 +54,13 @@ def render_coding_engineer_panel() -> None:
         value=True,
         help="Recommended for targets with little or no existing test coverage -- the drafted "
         "scenarios are otherwise the only thing that would catch a broken change.",
+    )
+
+    models = describe_all()
+    st.caption(
+        f"Primary model: `{models['primary']['model']}` ({models['primary']['provider']}) · "
+        f"Secondary model: `{models['secondary']['model']}` ({models['secondary']['provider']}) · "
+        "set via CODING_AGENT_PRIMARY_MODEL / CODING_AGENT_SECONDARY_MODEL in .env"
     )
 
     if not st.button("Run Coding Engineer"):

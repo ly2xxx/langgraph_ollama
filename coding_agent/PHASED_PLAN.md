@@ -385,6 +385,39 @@ a live model yet.
 
 ---
 
+## Phase 1 follow-up — log the resolved model before/during a run ✅
+
+Asked directly: log which model a run uses, or let the user pick one like
+the other three agents do. Picking would mean threading a model override
+from the panel through `get_llm()`/`CodingLoopState` into every LLM call
+site — a bigger, riskier change for what the other agents' "picker" mostly
+amounts to today (a selectbox around a single `OLLAMA_MODEL` env value).
+Logging was the smaller, lower-risk change and was already half-built:
+`models.py::describe(role)` existed since Phase 0 (its own docstring said
+"used by the UI / run report") but nothing had actually called it yet.
+
+**Delivered:**
+- `models.py::describe_all()` — `describe()` for both roles in one call, so
+  the CLI, panel, and report all answer "what model is this run using" the
+  same way instead of three hand-rolled dicts.
+- `stream_run` resolves it once up front and stores it in
+  `CodingLoopState["model_info"]` (new field), so a run's report reflects
+  what it actually used even if env vars change before the next run.
+- `run_cli` prints primary/secondary model+provider before starting.
+- The panel shows a caption with both resolved models above the Run button.
+- `report.py::render_report()` gained a "## Models" section (only when
+  `model_info` is present in state — integration tests that drive the graph
+  directly via `graph.invoke()`, bypassing `stream_run`, simply won't have
+  it, and the section is skipped rather than printing "None").
+
+**Verified:** new `test_describe_all_reports_both_roles` (models),
+`test_render_report_includes_models_section_when_present` /
+`..._omits_..._when_absent` (report.py, isolated from the full graph). Full
+suite: 53/53 pass (50 + 3 new). Ruff clean, both `--select E9,F` and the
+default rule set.
+
+---
+
 ## What's next — Phase 2
 
 Per `CODING_ENGINEER.md` §6: replace the `diagnose` stub with real

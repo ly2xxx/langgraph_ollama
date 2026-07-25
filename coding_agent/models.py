@@ -55,6 +55,14 @@ def describe(role: Role) -> dict[str, str | None]:
     return _resolve_role_config(role)
 
 
+def describe_all() -> dict[str, dict[str, str | None]]:
+    """`describe()` for both roles at once -- the single call site the CLI,
+    the panel, and the run report all go through, so "what model is this
+    run using" is answered the same way everywhere instead of three
+    hand-rolled dict-building spots drifting apart."""
+    return {"primary": describe("primary"), "secondary": describe("secondary")}
+
+
 def get_llm(role: Role, *, temperature: float = 0.0):
     """Return a chat model for the given role.
 

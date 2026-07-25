@@ -40,7 +40,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import interrupt
 
-from coding_agent.models import get_llm
+from coding_agent.models import describe_all, get_llm
 from coding_agent.prompts import AUTHOR_BDD_PROMPT, INTAKE_PROMPT, MAKER_SYSTEM_PROMPT
 from coding_agent.report import stop_flag_set, write_run_report
 from coding_agent.schemas import BddAuthorResult, TargetSpec
@@ -106,6 +106,7 @@ class CodingLoopState(TypedDict, total=False):
     is_fallback_copy: bool  # added in Phase 1 -- see module docstring
     goal: str
     budgets: Budgets
+    model_info: dict  # added in Phase 1 follow-up -- models.describe_all(), for the report/UI
     # goal definition
     spec: dict
     feature_paths: list[str]
@@ -722,6 +723,10 @@ def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False, budg
         "goal": goal,
         "hitl_bdd_approval": hitl,
         "budgets": budgets or {},
+        # Resolved once up front (not re-derived per node) so the report and
+        # any UI show exactly what this run actually used, even if env vars
+        # change between this run and the next one.
+        "model_info": describe_all(),
     }
     config = {"configurable": {"thread_id": run_id}, "recursion_limit": 150}
     yield from graph.stream(initial_state, config=config, stream_mode="updates")
@@ -731,6 +736,9 @@ def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None
     """Runs one goal to completion (or escalation) and returns the run_id."""
     run_id = new_run_id()
     print(f"run_id={run_id}")
+    models = describe_all()
+    print(f"primary model: {models['primary']}")
+    print(f"secondary model: {models['secondary']}")
     final_status = None
     for update in stream_run(run_id, target_dir, goal, hitl=hitl, budgets=budgets):
         for node_name, node_update in update.items():
