@@ -13,7 +13,7 @@ partner package).
 # Install Python 3.12 (uv manages the interpreter) and sync the locked env
 # installed to %APPDATA%\uv\python
 uv python install 3.12
-uv sync
+uv sync (uv sync --extra observability)
 
 # Run the Streamlit app
 uv run streamlit run app.py
