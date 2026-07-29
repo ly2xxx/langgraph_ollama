@@ -2,6 +2,8 @@
 
 The **Coding Engineer** is an autonomous, goal-driven coding agent framework built on [LangGraph](https://github.com/langchain-ai/langgraph). It executes complex software engineering tasks through a multi-stage state machine that integrates explicit specification intake, automated Behavior-Driven Development (BDD) scenario authoring, Tree-of-Thought (ToT) planning, sandboxed tool-assisted coding, multi-layered quality gates, adversarial code review, and deterministic no-progress failure detection.
 
+![1785337898562](image/README/1785337898562.png)
+
 ---
 
 ## 1. High-Level Architecture & Workflow
@@ -147,6 +149,7 @@ class CodingLoopState(TypedDict, total=False):
 * **Purpose**: Classifies failure categories (`syntax`, `test-logic`, `env`, `flake`, `design`) and computes a deterministic SHA-1 signature of the failure traceback.
 * **Code Reference**: `diagnose_node(state)` in [`engine.py`](file:///h:/code/yl/langgraph_ollama/coding_agent/engine.py#L1069) and signature utilities in [`signatures.py`](file:///h:/code/yl/langgraph_ollama/coding_agent/signatures.py).
 * **Signature Algorithm**:
+
   $$
   \text{signature} = \text{SHA1}(\text{phase} \mid \text{normalised\_test\_name} \mid \text{error\_class} \mid \text{message\_template} \mid \text{top\_frame\_func})
   $$
@@ -154,6 +157,7 @@ class CodingLoopState(TypedDict, total=False):
   Dynamic data (line numbers, timestamps, durations, file paths, hex addresses) are stripped via regex (`template_message()`), while test node IDs and exception details are preserved.
 * **No-Progress Routing**:
   If `failure_signature == prev_failure_signature`:
+
   - Active plan is retired and marked as `exhausted`.
   - If another candidate plan exists and `len(exhausted) < 2`, routes back to `plan_tot` to switch plans.
   - If 2 plans have been exhausted (`two_plans_exhausted`), immediately routes to `escalate_node`.
@@ -213,6 +217,7 @@ Below is an analysis of a real execution run log and escalation report:
 ### 5.3 Diagnostic Insights
 
 1. **Root Cause**: The BDD test module `features/steps/test_rag_agent_migration.py` attempted a top-level import:
+
    ```python
    import rag_agent.rag_research_chatbot
    ```
