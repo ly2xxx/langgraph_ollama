@@ -13,6 +13,7 @@ import asyncio
 import tempfile
 import os
 from ui.file_picker import render_file_picker
+from ui.coding_engineer_panel import render_coding_engineer_panel
 import urllib.parse
 from dotenv import load_dotenv
 import os
@@ -28,6 +29,7 @@ telemetry.init_telemetry()
 RAG_CHATBOT_AGENT = "RAG Chatbot Agent"
 ARTICLE_WRITER = "Article Writer"
 INTERNET_RESEARCHER = "Internet Researcher"
+CODING_ENGINEER = "Coding Engineer"
 
 load_dotenv()
 
@@ -126,8 +128,16 @@ def build_chain(chain_selection: str, model_selection: str):
 def main():
     st.title("Multi-agent Assistant Demo")
 
-    chain_selection = st.selectbox("Select assistant", [RAG_CHATBOT_AGENT, ARTICLE_WRITER, INTERNET_RESEARCHER])#[TRAVEL_AGENT, RESEARCH_AGENT, RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT, ARTICLE_WRITER])
-    
+    chain_selection = st.selectbox("Select assistant", [RAG_CHATBOT_AGENT, ARTICLE_WRITER, INTERNET_RESEARCHER, CODING_ENGINEER])#[TRAVEL_AGENT, RESEARCH_AGENT, RAG_RESEARCH_AGENT, RAG_CHATBOT_AGENT, ARTICLE_WRITER])
+
+    if chain_selection == CODING_ENGINEER:
+        # Different input shape entirely (target dir + goal, not a chat query)
+        # and doesn't use the model-selection/build_chain machinery below --
+        # coding_agent.models resolves its own primary/secondary models from
+        # env vars (CODING_ENGINEER.md §3.5). Render its panel and stop here.
+        render_coding_engineer_panel()
+        return
+
     # Clear chat history when switching away from RAG Chatbot Agent
     if "previous_agent" not in st.session_state:
         st.session_state.previous_agent = chain_selection
@@ -247,33 +257,13 @@ def main():
 def displayGraph(chain, chain_selection):
     """Render the agent's graph topology.
 
-    draw_mermaid_png() calls the remote mermaid.ink service, so the PNG is
-    cached on disk keyed by the graph's mermaid source — reruns (and offline
-    demos) never repeat the network call. Falls back to showing the mermaid
-    source text if the image can't be produced at all.
+    Implementation moved to ui/graph_display.py so the Coding Engineer
+    panel can share it -- see render_graph_diagram there for the caching
+    details (mermaid.ink PNG cached on disk keyed by mermaid source).
     """
-    import hashlib
-    from pathlib import Path
+    from ui.graph_display import render_graph_diagram
 
-    graph = chain.get_graph(xray=True)
-    mermaid_src = graph.draw_mermaid()
-    cache_dir = Path(".cache/graph-png")
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    png_path = cache_dir / (hashlib.sha256(mermaid_src.encode()).hexdigest()[:16] + ".png")
-
-    if not png_path.exists():
-        try:
-            png_path.write_bytes(graph.draw_mermaid_png())
-        except Exception:
-            with st.expander(f"{chain_selection} — graph diagram (image service unreachable)"):
-                st.code(mermaid_src)
-            return
-
-    image = Image.open(BytesIO(png_path.read_bytes()))
-    new_height = 460  # Desired height in pixels
-    new_width = int(new_height * image.width / image.height)  # Maintain aspect ratio
-    new_image = image.resize((new_width, new_height))
-    st.image(new_image, caption=chain_selection)
+    render_graph_diagram(chain, chain_selection)
 
 # def displayGraph(chain, chain_selection):
 #     # Get the graph

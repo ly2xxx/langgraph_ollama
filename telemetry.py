@@ -284,17 +284,32 @@ def record_tokens(agent: str, model: str, prompt_tokens: int, completion_tokens:
 
 
 @contextmanager
-def track_request(agent: str, model: str):
-    """Time an agent invocation and emit request/latency/active metrics.
+def track_request(agent: str, model: str, run_id: str | None = None):
+    """Time an agent invocation, set trace span attributes for Tempo, and emit
+    request/latency/active metrics.
 
     Usage:
-        with track_request("RAG Chatbot Agent", "glm-5:cloud"):
+        with track_request("Coding Engineer", "glm-5.2:cloud", run_id=run_id):
             output = graph.invoke(...)
     """
     attrs = {"agent": agent, "model": model}
     start = time.perf_counter()
     if _active_requests is not None:
         _active_requests.add(1, attrs)
+
+    try:
+        from opentelemetry import trace
+
+        span = trace.get_current_span()
+        if span and span.is_recording():
+            span.set_attribute("agent.name", agent)
+            span.set_attribute("llm.model", model)
+            if run_id:
+                span.set_attribute("coding_engineer.run_id", run_id)
+                span.set_attribute("run_id", run_id)
+    except Exception:
+        pass
+
     status = "ok"
     try:
         yield

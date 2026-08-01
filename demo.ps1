@@ -1,5 +1,5 @@
 # demo.ps1 — one-command interview demo launcher for langgraph_ollama + md-mcp.
-#
+# uv pip install openinference-instrumentation-langchain
 #   .\demo.ps1              # pre-flight checks, start everything, open browser
 #   .\demo.ps1 -Demo        # same, but apply the .env.demo preset first
 #   .\demo.ps1 -NoBrowser   # don't open browser tabs

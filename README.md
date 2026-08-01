@@ -12,8 +12,8 @@ partner package).
 ```bash
 # Install Python 3.12 (uv manages the interpreter) and sync the locked env
 # installed to %APPDATA%\uv\python
-uv python install 3.12
-uv sync
+uv python install 3.12 (uv venv --clear #if already have virtual env)
+uv sync (uv sync --extra observability #if want enable OTEL)
 
 # Run the Streamlit app
 uv run streamlit run app.py
