@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage
 # from web_research import create_web_research_graph
 # from web_research_rag import create_web_research_rag_graph
 # from web_research_consolidated import WebResearchGraph
-from rag_research_chatbot import RAGResearchChatbot
+from rag_agent.rag_research_chatbot import RAGResearchChatbot
 from mm_agent import ArticleWriterStateMachine
 from web_researcher import WebResearcher
 from io import BytesIO
