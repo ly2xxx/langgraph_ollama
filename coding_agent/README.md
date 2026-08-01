@@ -120,6 +120,11 @@ class CodingLoopState(TypedDict, total=False):
 * **Purpose**: Generates $k$ distinct candidate plans (Primary LLM, high temperature), scores them via the Secondary LLM judge (low temperature), and selects the highest-scoring untried plan. When re-entered after code failures, previous lessons (Graph-of-Thought feedback) are included in the prompt to re-score candidates.
 * **Code Reference**: `plan_tot_node(state)`, `_score_plans()`, `_llm_propose_plans()`, `_llm_judge_plans()` in [`engine.py`](file:///h:/code/yl/langgraph_ollama/coding_agent/engine.py#L610).
 * **Schemas**: [`PlanProposal`](file:///h:/code/yl/langgraph_ollama/coding_agent/schemas.py#L75) and [`PlanJudgement`](file:///h:/code/yl/langgraph_ollama/coding_agent/schemas.py#L88).
+* **Example**:
+  1. **Initial Entry**: Primary LLM proposes 3 plans: `P1` (Increase pool size), `P2` (Add retry backoff), `P3` (Switch to async driver). Judge scores them $\rightarrow$ `P1` (8.5), `P2` (7.0), `P3` (4.0). `P1` becomes active.
+  2. **Failure**: `P1` fails. `diagnose_node` retires `P1` and logs lesson: *"Pool size is not the bottleneck; timeouts caused by network drops."*
+  3. **Re-entry**: Surviving candidates (`P2`, `P3`) are **re-scored** with the lesson (not regenerated). `P2` score rises to 9.2 (directly targets network drops) and becomes active.
+
 
 ### 3.4 Code Generation (Maker): `code_node`
 
