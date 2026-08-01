@@ -22,6 +22,7 @@ and to pass 6/6 with a throwaway correct implementation dropped in and
 removed again.
 
 **Bugs caught during verification (not just happy-path checks):**
+
 - `worktree.diff()` originally used plain `git diff HEAD`, which is blind to
   brand-new untracked files — fixed with an `add -A -N` (intent-to-add) step
   before diffing.
@@ -39,9 +40,7 @@ still required to pick up the new dependencies.
 
 ## Phase 1 — Linear loop ✅
 
-**Delivered:** the full graph — `intake → author_bdd → plan_tot (single
-fixed plan) → code → self_check → bdd_gate → diagnose (stub) → finalize /
-escalate` — wired in `coding_agent/engine.py`, plus `coding_agent/schemas.py`
+**Delivered:** the full graph — `intake → author_bdd → plan_tot (single fixed plan) → code → self_check → bdd_gate → diagnose (stub) → finalize / escalate` — wired in `coding_agent/engine.py`, plus `coding_agent/schemas.py`
 (pydantic structured-output contracts), `coding_agent/prompts.py`,
 `coding_agent/report.py` (run-report + state-snapshot writer), and 7
 end-to-end integration tests in `coding_agent/tests/test_engine.py`.
@@ -54,6 +53,7 @@ classification, no `failure_signature`), and routes retry-vs-escalate on
 that basis alone.
 
 **What does and doesn't call an LLM in Phase 1:**
+
 - `intake` — real LLM call (structured `TargetSpec` output), via the
   `_llm_parse_target_spec` boundary function.
 - `author_bdd` — **no LLM call** for the sample_target demo: it first scans
@@ -79,18 +79,19 @@ level: it proves the orchestration (retries, budgets, escalation, commits)
 is correct without needing a live model, while leaving the model-facing
 prompts themselves to be validated in a real run against Ollama (not
 possible from this sandbox — see below). 39/39 tests pass (32 from Phase 0
+
 + 7 new), including a full CLI smoke test (`python -m coding_agent.engine`
-equivalent) that produced a real run-report.md and a clean diff implementing
-the kata.
+  equivalent) that produced a real run-report.md and a clean diff implementing
+  the kata.
 
 **Bugs caught during verification:**
+
 - `self_check`'s original `ruff check .` runs with `cwd` inside the target
   *worktree*, which sits outside this repo's directory tree — so this
   project's own `pyproject.toml` `[tool.ruff]` config never applies there.
   Against a target whose filesystem quirks we don't control (in the sandbox,
   every file reports the executable bit due to the mount, tripping `EXE002`
-  for reasons with nothing to do with code quality), an unscoped `ruff
-  check .` isn't a reliable fast gate. Fixed by pinning `self_check`'s ruff
+  for reasons with nothing to do with code quality), an unscoped `ruff check .` isn't a reliable fast gate. Fixed by pinning `self_check`'s ruff
   invocation to `--select E9,F` (syntax errors + pyflakes) explicitly,
   regardless of what config the target does or doesn't have — this is also
   arguably more correct for a "fast maker self-check" than a full style
@@ -103,6 +104,7 @@ the kata.
 **Deviations from CODING_ENGINEER.md — schema additions.** Three
 `CodingLoopState` fields exist in the implementation that §3.2 didn't
 explicitly define a home for; each is small and backward-compatible:
+
 - `escalation_reason: str | None` — `escalate`'s reason (§3.3: "the reason
   (budget | no-progress | unsuitable goal)") has to live somewhere in state
   to reach the report writer.
@@ -280,8 +282,7 @@ the unit and graph level.
 ## Phase 1 follow-up — second live-run bug: tool arg-schema collision ✅
 
 The `json_schema`/retry fix got past `intake`, but the second live run
-failed differently, in `code`: `run_pytest() got an unexpected keyword
-argument 'v__args'`. Root cause confirmed by reproducing it directly against
+failed differently, in `code`: `run_pytest() got an unexpected keyword argument 'v__args'`. Root cause confirmed by reproducing it directly against
 the installed `langchain-core`: `run_pytest`'s parameter was named `args`,
 and pydantic's function-wrapping internals (used by `@tool`'s schema
 inference) reserve `args`/`kwargs` as synthetic field names for wrapping
@@ -292,8 +293,7 @@ So the tool-calling model, told (correctly, by its own understanding of the
 tool) to pass a string, was handed a schema that actually required a list
 under a different field name; there was no way for it to succeed. Confirmed
 with a two-line repro before and after the fix (`t.args` showed
-`{'v__args': {'type': 'array', ...}}` for the old name, `{'pytest_args':
-{'type': 'string', ...}}` for the new one).
+`{'v__args': {'type': 'array', ...}}` for the old name, `{'pytest_args': {'type': 'string', ...}}` for the new one).
 
 **Fix:** renamed the parameter to `pytest_args`. **Verified:** a new
 regression test checks every maker tool's actual invocation schema (via
@@ -374,8 +374,7 @@ tool calls the way the single-file kata does. Raised to `max_iterations=20`.
 `coding_agent/sample_target/features/calculator.feature` inside the target
 (mirroring the exact self-hosting shape that caused bug #1) and asserts
 `author_bdd` adopts only the target's real, top-level feature file. Full
-suite: 50/50 pass. `ruff check coding_agent ui/coding_engineer_panel.py
-ui/graph_display.py` clean, both with `--select E9,F` and the project's
+suite: 50/50 pass. `ruff check coding_agent ui/coding_engineer_panel.py ui/graph_display.py` clean, both with `--select E9,F` and the project's
 default rule set. **Not yet verified:** a fifth live run against Ollama —
 the sandbox has no path to the user's machine, so the fix for the
 `app.py.bak` rename in particular (a prompt-wording change, not something a
@@ -397,6 +396,7 @@ Logging was the smaller, lower-risk change and was already half-built:
 "used by the UI / run report") but nothing had actually called it yet.
 
 **Delivered:**
+
 - `models.py::describe_all()` — `describe()` for both roles in one call, so
   the CLI, panel, and report all answer "what model is this run using" the
   same way instead of three hand-rolled dicts.
@@ -581,8 +581,7 @@ no-progress detection, an LLM-classified diagnose, and durable pause/resume.
 **Delivered:**
 
 1. **`coding_agent/signatures.py`** — the §3.4 recipe as code:
-   `sha1(phase | normalised_test_name | error_class | message_template |
-   top_frame_func)`. `normalise_test_name` drops the parametrisation suffix
+   `sha1(phase | normalised_test_name | error_class | message_template | top_frame_func)`. `normalise_test_name` drops the parametrisation suffix
    (`test_add[3-5]` -> `test_add`); `template_message` strips the things that
    churn between edits (paths, line numbers, hex, durations, timestamps) but
    deliberately keeps assertion *values* so `expected 3 got 5` and
@@ -616,6 +615,7 @@ no-progress detection, an LLM-classified diagnose, and durable pause/resume.
 
 **Verified (all against real ruff/pytest/git subprocesses; the three LLM
 boundaries mocked):**
+
 - `test_no_progress_escalates_on_identical_failure` — a stuck maker producing
   the identical BDD failure escalates as `no_progress` after just 2 attempts,
   well inside a generous budget, and both lessons share a signature.
@@ -673,8 +673,8 @@ plan inform the next.
      maker/checker split applied to planning (the model that proposed a plan
      isn't the one scoring it, when a distinct secondary is configured).
    - *Select*: highest-scoring non-exhausted plan becomes active.
-   Degrades gracefully: if propose or judge can't be parsed, falls back to a
-   single plan / proposal-order scoring rather than crashing.
+     Degrades gracefully: if propose or judge can't be parsed, falls back to a
+     single plan / proposal-order scoring rather than crashing.
 2. **Graph-of-Thought re-planning.** On re-entry after a plan is retired,
    `plan_tot` **re-scores the surviving candidates with the aggregated lessons
    in the judge prompt** (`_lessons_block`) rather than regenerating them —
@@ -706,6 +706,7 @@ key sharing a name, and the node is called `review`. `bdd_gate` now routes to
 `review` (not `finalize`); `diagnose` gained the `plan_tot` route.
 
 **Verified (real ruff/pytest/git; the six LLM boundaries mocked):**
+
 - `test_seeded_bad_plan_triggers_observable_plan_switch` — two candidate
   plans; plan-1 stalls (identical failure twice), the loop retires it and
   switches to plan-2, which succeeds. `exhausted_plan_ids` contains `plan-1`,
@@ -779,12 +780,13 @@ pleasant to drive from the browser and visible in the observability stack.
    `.loop/` tree is gitignored, so this never pollutes `git status`.)
 
 **Verified:**
+
 - `test_token_budget_is_a_hard_stop` — a maker that reports usage each attempt
   and fails differently each time (distinct signatures, so no-progress doesn't
   pre-empt it) escalates `token_budget` once the tally passes the budget.
 - `test_panel_import.py` — the panel module imports and exposes its entry point
   + demo goals (streamlit is a real dep in the sandbox); `CODING_ENGINEER_LABEL`
-  is asserted.
+    is asserted.
 - Full `coding_agent` suite: **82 pass** (28 engine + 54 unit), ruff clean
   (`--select E9,F` and default). The token wiring touches every run's
   `code_node` and `diagnose`; the whole pre-Phase-4 suite still passes, and the
@@ -838,3 +840,23 @@ a Streamlit panel with budgets, streaming, telemetry, a verdict banner, and a
 diff viewer. Possible follow-ups, none required: a non-Ollama provider branch
 in `models.py` (the seam is there), parallel ToT beam execution (deliberately
 deferred for local-model token cost), and `gh pr create` from `finalize`.
+
+
+
+🚀 **Use AI to Build Reliable AI**
+
+With foundational pillars like BDD testing, OpenTelemetry (OTEL) observability, and DeepEval metrics already in place, building autonomous, complex agent harnesses—like an engineering-grade Coding Agent—is no longer a gamble. It is a repeatable software engineering discipline.
+
+**Context:** Complex coding tasks fail when agents fall into narrow solution tunnels or repeat failed strategies. I needed a planning engine that explores creative solutions without burning context windows or repeating dead ends.
+
+**The Stack & Architecture:** LangGraph → Hybrid Tree-of-Thought (ToT) & Graph-of-Thought (GoT) Planning → BDD & Ruff Quality Gates.
+
+**What I Got:** ✅ **High-Temperature Solution Exploration (ToT):** The primary model generates $k$ diverse candidate strategies up front, ensuring broad search-space coverage. ✅ **Cold-Judge Evaluation & Dynamic Re-Scoring (GoT):** When a plan hits a roadblock, failure diagnostics are aggregated as lessons across the execution graph. Surviving candidate plans are dynamically re-scored against past lessons—**zero redundant re-generation required.** ✅ **Deterministic Quality Gates:** Every code iteration must pass fast linting, BDD acceptance suites, and adversarial code reviews before merge.
+
+**Why This Matters:** Combining ToT exploration with GoT feedback loops strikes the sweet spot between GenAI creative hypothesis generation and empirical runtime practicality. We don't just ask AI to code—we build multi-layered governance harnesses that guide, evaluate, and discipline the AI at every step.
+
+*Check out the implementation architecture & workflow here:* [t](https://lnkd.in/e8vURPYi)bd
+
+How are you balancing search-space exploration and reliability in your agent harnesses? Drop a comment! 👇
+
+#AI #LLM #LangGraph #TreeOfThought #GraphOfThought #AgenticCoding #EnterpriseAI #LocalFirst #SoftwareEngineering
