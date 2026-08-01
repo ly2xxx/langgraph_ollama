@@ -199,4 +199,3 @@ if __name__ == "__main__":
             print(f"Chatbot: {last_message.content}")
     
     print("Thank you for using the RAG Research Chatbot!")
-

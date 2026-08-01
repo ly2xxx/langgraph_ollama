@@ -1,0 +1,1 @@
+"""rag_agent package — RAG research chatbot agent."""
