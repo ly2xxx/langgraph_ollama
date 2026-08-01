@@ -841,9 +841,7 @@ diff viewer. Possible follow-ups, none required: a non-Ollama provider branch
 in `models.py` (the seam is there), parallel ToT beam execution (deliberately
 deferred for local-model token cost), and `gh pr create` from `finalize`.
 
-
-
-🚀 **Use AI to Build Reliable AI**
+🚀 **Use AI to Build Reliable AI (August 2026)**
 
 With foundational pillars like BDD testing, OpenTelemetry (OTEL) observability, and DeepEval metrics already in place, building autonomous, complex agent harnesses—like an engineering-grade Coding Agent—is no longer a gamble. It is a repeatable software engineering discipline.
 
@@ -855,7 +853,7 @@ With foundational pillars like BDD testing, OpenTelemetry (OTEL) observability, 
 
 **Why This Matters:** Combining ToT exploration with GoT feedback loops strikes the sweet spot between GenAI creative hypothesis generation and empirical runtime practicality. We don't just ask AI to code—we build multi-layered governance harnesses that guide, evaluate, and discipline the AI at every step.
 
-*Check out the implementation architecture & workflow here:* [github.com/ly2xxx/langgraph_ollama/tree/feature/agent-loop/coding_agent](https://github.com/ly2xxx/langgraph_ollama/tree/feature/agent-loop/coding_agent)
+*Check out the implementation architecture & workflow here:* [github.com/ly2xxx/langgraph_ollama/tree/feature/agent-loop/coding_agent](https://github.com/ly2xxx/langgraph_ollama/tree/feature/agent-loop/coding_agent) (If you have Ollama subscription, feel free to download and run the agent yourself). Personally I am looking forward to using this agent to code while I sleep :)
 
 How are you balancing search-space exploration and reliability in your agent harnesses? Drop a comment! 👇
 
