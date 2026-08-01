@@ -172,7 +172,21 @@ class CodingLoopState(TypedDict, total=False):
 * **Purpose**: Commits worktree changes and produces structured markdown reports ([`run-report.md`](file:///h:/code/yl/langgraph_ollama/coding_agent/report.py#L39)) and machine-readable state snapshots ([`state.json`](file:///h:/code/yl/langgraph_ollama/coding_agent/report.py#L188)).
 * **Code Reference**: `finalize_node()`, `escalate_node()` in [`engine.py`](file:///h:/code/yl/langgraph_ollama/coding_agent/engine.py#L1204), and `write_run_report()` in [`report.py`](file:///h:/code/yl/langgraph_ollama/coding_agent/report.py#L168).
 
+### 3.10 Execution Safety & Budget Controls
+
+The agent loop enforces strict safety rails configured via `budgets` in `CodingLoopState` (and exposed in [`coding_engineer_panel.py`](file:///h:/code/yl/langgraph_ollama/ui/coding_engineer_panel.py#L60-L67)):
+
+| Budget Parameter | Default | Scope & Behavior |
+| :--- | :--- | :--- |
+| **`max_attempts_per_plan`** | `3` | Maximum retry attempts for a single active plan before `diagnose_node` marks it as `exhausted` and switches to another plan. |
+| **`max_plans`** | `3` | ToT parameter $k$: the number of distinct candidate solution plans generated during initial planning. |
+| **`max_total_attempts`** | `9` | Global hard ceiling on total code/test execution cycles across all plans combined before triggering an escalation. |
+| **`cmd_timeout_s`** | `120s` | Maximum execution time allowed for any individual shell tool command (e.g. `pytest`, `ruff`). |
+| **`wall_clock_s`** | `1800s` | Overall real-time deadline (30 mins) for the entire run. Exceeding triggers a `wall_clock` escalation exit. |
+| **`token_budget`** | `0` *(unlimited)* | Optional cap on cumulative LLM token consumption across all calls during the run. |
+
 ---
+
 
 ## 4. Dual-Model Architecture (`models.py`)
 

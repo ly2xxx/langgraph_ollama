@@ -855,7 +855,7 @@ With foundational pillars like BDD testing, OpenTelemetry (OTEL) observability, 
 
 **Why This Matters:** Combining ToT exploration with GoT feedback loops strikes the sweet spot between GenAI creative hypothesis generation and empirical runtime practicality. We don't just ask AI to code—we build multi-layered governance harnesses that guide, evaluate, and discipline the AI at every step.
 
-*Check out the implementation architecture & workflow here:* [t](https://lnkd.in/e8vURPYi)bd
+*Check out the implementation architecture & workflow here:* [github.com/ly2xxx/langgraph_ollama/tree/feature/agent-loop/coding_agent](https://github.com/ly2xxx/langgraph_ollama/tree/feature/agent-loop/coding_agent)
 
 How are you balancing search-space exploration and reliability in your agent harnesses? Drop a comment! 👇
 
