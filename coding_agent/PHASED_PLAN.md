@@ -858,3 +858,41 @@ With foundational pillars like BDD testing, OpenTelemetry (OTEL) observability, 
 How are you balancing search-space exploration and reliability in your agent harnesses? Drop a comment! 👇
 
 #AI #LLM #LangGraph #TreeOfThought #GraphOfThought #AgenticCoding #EnterpriseAI #LocalFirst #SoftwareEngineering
+
+
+# Phase II prompt:
+
+Task: Refactor `coding_agent/engine.py` (~1,350 lines) into clean, single-responsibility submodules inside `coding_agent/` while maintaining 100% backward compatibility.
+
+### Objectives & Target Structure
+
+Decompose `coding_agent/engine.py` into the following submodules:
+
+1. `coding_agent/state.py`:
+
+   - `CodingLoopState`, `Budgets`, `Plan`, `Lesson` TypedDict definitions.
+   - `DEFAULT_BUDGETS`, `CODING_ENGINEER_LABEL`, and helper functions like `_loop_state_dir`, `_status_message`, `_handle_from_state`.
+2. `coding_agent/llm_boundaries.py`:
+
+   - All isolated LLM invocation wrappers: `_llm_parse_target_spec`, `_llm_author_bdd`, `_llm_propose_plans`, `_llm_judge_plans`, `_llm_diagnose`, `_llm_review`, `_run_maker`.
+3. `coding_agent/gates.py`:
+
+   - Quality gate logic and differential linting: `_run_ruff_json`, `_ruff_new_findings`, `_render_ruff_findings`, `_read_json_report`, `_read_failures`, `_read_step_defs`, `_harness_exclude_dirs`, `_is_under_any`.
+4. `coding_agent/maker_tools.py`:
+
+   - Tool construction: `_build_maker_tools` and `_maker_task_text`.
+5. `coding_agent/nodes.py`:
+
+   - StateGraph node implementations (`intake_node`, `author_bdd_node`, `plan_tot_node`, `code_node`, `self_check_node`, `bdd_gate_node`, `review_node`, `diagnose_node`, `finalize_node`, `escalate_node`).
+   - Conditional routing functions (`_route_after_intake`, `_route_after_author_bdd`, `_route_after_self_check`, `_route_after_bdd_gate`, `_route_after_review`, `_route_after_diagnose`).
+6. `coding_agent/engine.py` (Main Entrypoint & Compatibility Layer):
+
+   - Retain `build_graph()`, `CodingEngineer`, `stream_run()`, `run_cli()`, `new_run_id()`, and `__main__`.
+   - Re-export all imported symbols, node functions, boundary functions, and types from the new submodules so that existing imports across `app.py`, `ui/`, and `tests/test_engine.py` continue to work seamlessly without breaking.
+
+### Strict Constraints
+
+1. **Verification First**: Before making any changes, run `pytest coding_agent/tests/` to verify the baseline test suite passes.
+2. **Zero Functional Changes**: Do NOT change node names, state keys, prompt formats, routing logic, or graph execution order.
+3. **Preserve Monkeypatch Surfaces**: `test_engine.py` monkeypatches functions like `_llm_parse_target_spec`, `_llm_author_bdd`, `_run_maker`, etc. Make sure these remain importable/patchable via `coding_agent.engine` or are updated cleanly in tests if needed.
+4. **Final Verification**: Run `pytest coding_agent/tests/` after refactoring. All tests must pass 100%.
