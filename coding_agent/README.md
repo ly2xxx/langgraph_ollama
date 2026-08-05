@@ -247,7 +247,19 @@ Below is an analysis of a real execution run log and escalation report:
 
 ---
 
-## 6. Directory File Structure
+## 6. Crash Recovery & Resumability (Time Travel)
+
+Because the agent runs in long loops of coding, testing, and reviewing, it is designed with fault tolerance as a core feature. It uses LangGraph's `SqliteSaver` checkpointer (persisted at `.loop/state/coding-engineer/checkpoints.db`).
+
+### How to Resume a Run
+
+1. **Automatic Checkpointing**: At every node transition in the graph, LangGraph writes the entire state to the SQLite checkpointer. 
+2. **Resuming after a Crash / Streamlit Reboot**: If the Streamlit app reboots, the script crashes, or you manually halt execution, your progress is not lost. To resume, simply start a new run using the exact same **Run ID** (`run_id`). 
+3. **Behavior**: The `SqliteSaver` will look up the `thread_id` matching your `run_id`, restore the graph to the exact node and state where it left off, and continue execution automatically without needing to re-plan or re-run passed tests.
+
+---
+
+## 7. Directory File Structure
 
 ```
 coding_agent/
@@ -275,9 +287,9 @@ coding_agent/
 
 ---
 
-## 7. CLI Usage & Programmatic API
+## 8. CLI Usage & Programmatic API
 
-### 7.1 Running from CLI
+### 8.1 Running from CLI
 
 To launch the agent from the terminal against a target directory and goal:
 
@@ -285,7 +297,13 @@ To launch the agent from the terminal against a target directory and goal:
 python -m coding_agent.engine --target /path/to/target/repo --goal "Refactor X into package Y"
 ```
 
-### 7.2 Programmatic Streaming (`stream_run`)
+To resume a previous execution that was halted or crashed, supply the `--run-id` flag with the existing run's ID:
+
+```bash
+python -m coding_agent.engine --target /path/to/target/repo --goal "Refactor X into package Y" --run-id "20260728T174316-4235987a"
+```
+
+### 8.2 Programmatic Streaming (`stream_run`)
 
 To integrate live progress updates into a custom UI (such as Streamlit or a web dashboard):
 
