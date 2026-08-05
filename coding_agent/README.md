@@ -255,7 +255,12 @@ coding_agent/
 ├── CODING_ENGINEER.md    # Original technical spec & requirements document
 ├── PHASED_PLAN.md        # Phased implementation log & roadmap
 ├── __init__.py           # Package exports (CodingEngineer, CODING_ENGINEER_LABEL)
-├── engine.py             # LangGraph state machine, nodes, and CLI driver
+├── engine.py             # Compatibility layer & CLI runner – re-exports all submodules
+├── state.py              # State schema (CodingLoopState), Budgets, Lessons & state helpers
+├── llm_boundaries.py     # Isolated LLM call functions (_llm_parse_target_spec, _run_maker, etc.)
+├── gates.py              # Quality gate logic (ruff differential checking, pytest output reading)
+├── maker_tools.py        # Tool construction for the maker agent (_build_maker_tools)
+├── nodes.py              # LangGraph node functions (intake_node, code_node, etc.) & routers
 ├── models.py             # Primary / Secondary LLM resolution (`get_llm`)
 ├── prompts.py            # System prompts for intake, author_bdd, ToT, maker, reviewer, diagnose
 ├── report.py             # Markdown run report & JSON state snapshot generator
