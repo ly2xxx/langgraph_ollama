@@ -225,10 +225,10 @@ def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False, budg
     yield from graph.stream(initial_state, config=config, stream_mode="updates")
 
 
-def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None) -> str:
+def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None, run_id: str | None = None) -> str:
     """Runs one goal to completion (or escalation) and returns the run_id."""
     telemetry.init_telemetry()
-    run_id = new_run_id()
+    run_id = run_id or new_run_id()
     print(f"run_id={run_id}")
     models = describe_all()
     print(f"primary model: {models['primary']}")
@@ -262,6 +262,7 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument("--hitl", action="store_true", help="Enable the optional author_bdd HITL pause.")
+    parser.add_argument("--run-id", help="Resume an existing run by providing its run_id.")
     args = parser.parse_args()
 
-    run_cli(args.target, args.goal, hitl=args.hitl)
+    run_cli(args.target, args.goal, hitl=args.hitl, run_id=args.run_id)
