@@ -22,7 +22,7 @@ class WorktreeError(Exception):
 def _run_git(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args],
-        cwd=str(cwd),
+        cwd=str(Path(cwd).resolve()),
         capture_output=True,
         text=True,
         shell=False,

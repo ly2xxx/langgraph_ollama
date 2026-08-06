@@ -112,7 +112,7 @@ class CodingLoopState(TypedDict, total=False):
 
 
 def _loop_state_dir() -> Path:
-    return Path(os.getenv("CODING_AGENT_LOOP_DIR", ".loop"))
+    return Path(os.getenv("CODING_AGENT_LOOP_DIR", ".loop")).resolve()
 
 
 def _status_message(node: str, ok: bool, note: str = "") -> AIMessage:
