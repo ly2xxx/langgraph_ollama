@@ -318,3 +318,38 @@ for update in stream_run(run_id, target_dir, goal):
     for node_name, node_update in update.items():
         print(f"Node [{node_name}] -> status: {node_update.get('status')}")
 ```
+
+### 8.3 Archiving & Cleaning Up Worktrees
+
+**To archive a worktree before cleanup** (preserves Git metadata):
+```powershell
+# Create target archive folder if it doesn't exist
+New-Item -ItemType Directory -Path .loop\archived_worktrees -Force
+
+# Move the worktree safely
+git worktree move .loop\worktrees\<run_id> .loop\archived_worktrees\<run_id>
+
+# Quick remove
+Get-ChildItem .loop\worktrees -Directory | Where-Object Name -ne "archived_worktrees" | ForEach-Object { git worktree remove $_.FullName --force }
+
+
+```
+
+**To clean up remaining worktree directories** (handles both registered Git worktrees and non-Git fallback copies):
+
+**PowerShell (Windows):**
+```powershell
+git worktree prune
+Get-ChildItem .loop\worktrees -Directory | ForEach-Object {
+    git worktree remove $_.FullName --force 2>$null
+    if (Test-Path $_.FullName) {
+        Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+```
+
+**Bash / Git CLI:**
+```bash
+git worktree prune
+```
+
