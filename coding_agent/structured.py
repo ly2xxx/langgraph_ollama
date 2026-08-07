@@ -35,8 +35,8 @@ SchemaT = TypeVar("SchemaT", bound=BaseModel)
 _RETRY_SUFFIX = (
     "\n\nIMPORTANT: your previous response could not be parsed as structured output "
     "(error: {error}). Respond with ONLY a single valid JSON object matching the "
-    "required schema -- no markdown formatting, no code fences, no commentary, no "
-    "field-name bolding. Just the JSON object."
+    "required schema -- properly escape all newlines as \\n inside multi-line string values. "
+    "No markdown formatting, no code fences, no commentary. Just the raw JSON object."
 )
 
 # Methods to try, in order. json_schema constrains Ollama's decoder to the

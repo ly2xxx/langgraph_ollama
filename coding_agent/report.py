@@ -165,6 +165,7 @@ def render_report(state: dict[str, Any], outcome: str, commit_rev: str) -> str:
     return "\n".join(lines)
 
 
+##### 17. Persistent Artifacts: Writes run-report.md and state.json for human-in-the-loop review
 def write_run_report(state: dict[str, Any], loop_state_dir: Path, outcome: str, commit_rev: str = "") -> Path:
     run_dir = _run_dir(state, loop_state_dir)
 

@@ -22,7 +22,7 @@ class WorktreeError(Exception):
 def _run_git(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args],
-        cwd=str(cwd),
+        cwd=str(Path(cwd).resolve()),
         capture_output=True,
         text=True,
         shell=False,
@@ -45,6 +45,7 @@ class WorktreeHandle:
     is_fallback_copy: bool  # True if target wasn't a git repo
 
 
+##### 3. Persistent Memory: Dedicated git worktree checkout per run on its own branch
 def create_worktree(target_dir: Path, run_id: str, loop_state_dir: Path) -> WorktreeHandle:
     """Create an isolated checkout for `run_id`.
 
