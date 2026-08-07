@@ -11,9 +11,10 @@ dependencies = [
     "langchain-community>=0.3,<0.4",
     "langchain-text-splitters>=0.3,<0.4",
     "langchain-ollama>=0.2",
-    # LangGraph 0.3.x + sqlite checkpointer (now a separate package)
-    "langgraph>=0.3,<0.4",
+    # LangGraph stack + sqlite checkpointer + CLI
+    "langgraph>=0.4",
     "langgraph-checkpoint-sqlite>=2",
+    "langgraph-cli[inmem]",
     # App / UI
     "streamlit",
     "pillow",

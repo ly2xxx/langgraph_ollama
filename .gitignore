@@ -150,6 +150,10 @@ wandb/
 .tool-versions
 /.ruff_cache/
 
+# LangGraph dev / studio local runtime state
+*.pckl
+.langgraph_api/
+
 # *.pkl
 *.bin
 

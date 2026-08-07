@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "coding_engineer": "./coding_agent/engine.py:build_graph"
+  },
+  "env": ".env"
+}

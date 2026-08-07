@@ -353,3 +353,23 @@ Get-ChildItem .loop\worktrees -Directory | ForEach-Object {
 git worktree prune
 ```
 
+### 8.4 Visual Debugging with LangGraph Studio (`langgraph dev`)
+
+To launch the interactive local LangGraph Studio UI to visually inspect the state machine, node transitions, checkpoints, and interrupts:
+
+```powershell
+# 1. Re-create a clean virtual environment
+uv venv --clear
+
+# 2. Sync core dependencies + observability extra
+uv sync --extra observability
+
+# 3. Launch langgraph dev
+uv run langgraph dev
+```
+
+Open `http://127.0.0.1:2024` in your browser to view the interactive LangGraph Studio interface:
+
+![LangGraph Studio UI](../image/README/langgraph_studio.png)
+
+
