@@ -65,6 +65,7 @@ class Jail:
 
     # -- resolution ----------------------------------------------------
 
+    ##### 8b. Path Containment: Symlink-proof containment via os.path.realpath + _is_relative_to
     def resolve(self, relative_path: str) -> Path:
         """Resolve `relative_path` against root and verify it stays inside.
 
@@ -92,6 +93,7 @@ class Jail:
         except ValueError:
             return False
 
+    ##### 8c. Jail Enforcement: Refuses write, patch, delete, and move on frozen paths & .git
     def _check_frozen(self, real_path: Path, op: str) -> None:
         try:
             rel = real_path.relative_to(self.root)
@@ -149,6 +151,7 @@ class Jail:
 # Allowlisted command runner
 # ---------------------------------------------------------------------------
 
+##### 8d. Subprocess Safety: Binary & subcommand allowlist for pytest, ruff, git
 _ALLOWED_BINARIES = {"pytest", "ruff", "python", "git"}
 
 _GIT_SUBCOMMAND_ALLOWLIST = {"status", "diff", "add", "commit", "log", "rev-parse"}
@@ -189,6 +192,7 @@ def _check_git_args(args: list[str]) -> None:
                 raise CommandRejected(f"git argument {arg!r} is never permitted")
 
 
+##### 8e. Command Execution: List-args, worktree cwd pinning, environment sanitization, shell=False
 def run_command(
     binary: str,
     args: list[str],

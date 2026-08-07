@@ -64,6 +64,7 @@ def _llm_diagnose(llm, state: CodingLoopState, phase: str, failure_detail: str) 
     return invoke_structured(llm, DiagnosisResult, prompt)
 
 
+##### 6c. Context Engineering (ACE Playbook): Itemized, incremental failure lessons merged by deterministic code
 def _lessons_block(state: CodingLoopState) -> str:
     """Aggregated lessons for the ToT re-planning prompt (the GoT step) -- empty
     on the first planning pass, populated once plans start dying."""
@@ -79,6 +80,7 @@ def _criteria_text(state: CodingLoopState) -> str:
     return "\n".join(f"- {c}" for c in criteria) or "(none extracted)"
 
 
+##### 6a. ToT Candidate Proposal: Primary model proposes 3 distinct plans (temp 0.8)
 def _llm_propose_plans(llm, state: CodingLoopState, k: int) -> PlanProposal:
     prompt = PLAN_PROPOSE_PROMPT.format(
         k=k, goal=state["goal"], acceptance_criteria=_criteria_text(state), lessons_block=_lessons_block(state)
@@ -86,6 +88,7 @@ def _llm_propose_plans(llm, state: CodingLoopState, k: int) -> PlanProposal:
     return invoke_structured(llm, PlanProposal, prompt)
 
 
+##### 6b. Cold Evaluation Scoring: Secondary judge model scores candidate plans against lessons (temp 0.0)
 def _llm_judge_plans(llm, state: CodingLoopState, plans: list[dict]) -> PlanJudgement:
     plans_block = "\n".join(
         f"[{i}] {p.get('rationale', '')}\n" + "\n".join(f"    - {s}" for s in p.get("steps", []))
@@ -100,6 +103,7 @@ def _llm_judge_plans(llm, state: CodingLoopState, plans: list[dict]) -> PlanJudg
     return invoke_structured(llm, PlanJudgement, prompt)
 
 
+##### 12b. Adversarial Review Prompt: Blinded to maker reasoning (sees spec, diff, step defs, test output only)
 def _llm_review(llm, state: CodingLoopState) -> ReviewVerdict:
     bdd = state.get("bdd_report") or {}
     step_defs = _read_step_defs(state)

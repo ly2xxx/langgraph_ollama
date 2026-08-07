@@ -121,6 +121,7 @@ def _fallback_plan() -> Plan:
     }
 
 
+##### 6b. ToT Judge Scoring: Secondary model (temp 0.0) cold evaluation against accumulated lessons
 def _score_plans(state: CodingLoopState, plans: list[Plan], exclude: set[str]) -> list[Plan]:
     """Judge (secondary role, temperature 0) scores the not-yet-exhausted plans.
     On re-entry the aggregated lessons ride along in the prompt -- the GoT step,
@@ -149,6 +150,7 @@ def _score_plans(state: CodingLoopState, plans: list[Plan], exclude: set[str]) -
 # ---------------------------------------------------------------------------
 
 
+##### 4. State Machine Node 1/10: Intake (Goal evaluation & worktree initialization)
 def intake_node(state: CodingLoopState) -> dict:
     budgets = {**DEFAULT_BUDGETS, **(state.get("budgets") or {})}
     llm = _eng().get_llm("primary")
@@ -204,6 +206,7 @@ def _route_after_author_bdd(state: CodingLoopState) -> str:
     return "escalate" if state.get("status") == "escalated" else "plan_tot"
 
 
+##### 5. State Machine Node 2/10: BDD Authoring (Definition of done frozen before code exists)
 def author_bdd_node(state: CodingLoopState) -> dict:
     worktree_dir = Path(state["worktree_dir"])
     # Bug found on the first real self-hosted run: an unscoped rglob picked up
@@ -261,6 +264,7 @@ def author_bdd_node(state: CodingLoopState) -> dict:
     }
 
 
+##### 6. State Machine Node 3/10: Plan ToT (Tree-of-Thought planning & Graph-of-Thought recovery)
 def plan_tot_node(state: CodingLoopState) -> dict:
     """Tree-of-Thought planning (CODING_ENGINEER.md §3.6). First entry: the
     primary model proposes k distinct plans (hot), the secondary-role judge
@@ -311,6 +315,7 @@ def plan_tot_node(state: CodingLoopState) -> dict:
     }
 
 
+##### 8. State Machine Node 4/10: Code Execution (Maker model executes code with frozen acceptance tests in Jail)
 def code_node(state: CodingLoopState) -> dict:
     jail = Jail(root=Path(state["worktree_dir"]), frozen=frozenset(Path(p) for p in state.get("feature_paths", [])))
     llm = _eng().get_llm("primary", temperature=0.2)
@@ -337,6 +342,7 @@ def code_node(state: CodingLoopState) -> dict:
     }
 
 
+##### 10. State Machine Node 5/10: Self Check (Differential ruff linting & pytest unit tests)
 def self_check_node(state: CodingLoopState) -> dict:
     worktree_dir = Path(state["worktree_dir"])
     timeout = state["budgets"]["cmd_timeout_s"]
@@ -440,6 +446,7 @@ def _route_after_self_check(state: CodingLoopState) -> str:
     return "bdd_gate" if state["test_report"]["passed"] else "diagnose"
 
 
+##### 11. State Machine Node 6/10: BDD Gate (Frozen BDD acceptance test verification)
 def bdd_gate_node(state: CodingLoopState) -> dict:
     worktree_dir = Path(state["worktree_dir"])
     timeout = state["budgets"]["cmd_timeout_s"]
@@ -481,6 +488,7 @@ def _route_after_bdd_gate(state: CodingLoopState) -> str:
     return "review" if state["bdd_report"]["passed"] else "diagnose"
 
 
+##### 12. State Machine Node 7/10: Review (Adversarial reviewer on secondary model, temp 0.0, blinded to maker reasoning)
 def review_node(state: CodingLoopState) -> dict:
     """Adversarial checker (CODING_ENGINEER.md §3.3), always the secondary role
     (§3.5) -- a different model catches more than a different prompt on the same
@@ -594,6 +602,7 @@ def _append_lesson(state: CodingLoopState, attempt: int, plan_id: str, signature
     return lessons
 
 
+##### 14. State Machine Node 8/10: Diagnose (Engineered stopping: failure signature, 2-plan exhaustion, budgets & flake retry)
 def diagnose_node(state: CodingLoopState) -> dict:
     """Classify the failure, sign it (§3.4), and decide retry / escalate.
 
@@ -714,6 +723,7 @@ def _route_after_diagnose(state: CodingLoopState) -> str:
     return "code"
 
 
+##### 15. State Machine Node 9/10: Finalize (Git commit & report writing)
 def finalize_node(state: CodingLoopState) -> dict:
     handle = _handle_from_state(state)
     rev = worktree_commit(handle, f"coding-engineer: {state['goal'][:72]}")
@@ -721,6 +731,7 @@ def finalize_node(state: CodingLoopState) -> dict:
     return {"status": "done", "messages": [_status_message("finalize", True, note=f"report: {report_path}")]}
 
 
+##### 16. State Machine Node 10/10: Escalate (First-class outcome: commits WIP worktree & writes report)
 def escalate_node(state: CodingLoopState) -> dict:
     reason = state.get("escalation_reason") or "unknown"
     rev = ""

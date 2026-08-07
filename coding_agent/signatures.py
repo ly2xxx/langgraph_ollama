@@ -63,6 +63,7 @@ def template_message(message: str) -> str:
     return s.strip()
 
 
+##### 13. Normalised Failure Signature Recipe: sha1(phase | test_name | error_class | message_template | top_frame_func)
 def compute_signature(
     phase: str,
     test_name: str | None,

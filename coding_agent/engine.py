@@ -1,5 +1,7 @@
 """Coding Engineer — the non-stop coding agent's LangGraph graph.
 
+##### 0. Single-Responsibility Refactor: Harness modularized into state, nodes, gates, models, and boundaries.
+
 This module is the main entrypoint and backward-compatibility layer after
 the single-responsibility refactor.  The implementation now lives in focused
 submodules under ``coding_agent/``:
@@ -142,6 +144,7 @@ from coding_agent.nodes import (  # noqa: F401
 # ---------------------------------------------------------------------------
 
 
+##### 1. State Machine Definition: 10-node goal-oriented workflow loop in LangGraph
 def build_graph(checkpointer=None):
     graph = StateGraph(CodingLoopState)
     graph.add_node("intake", intake_node)
@@ -179,6 +182,7 @@ class CodingEngineer:
     is what app.py calls in Phase 4. Owns the SqliteSaver checkpointer lifecycle."""
 
     def create_graph(self):
+        ##### 1b. Checkpointer: Durable graph state checkpointing in SQLite
         loop_dir = _loop_state_dir()
         db_path = loop_dir / "state" / "coding-engineer" / "checkpoints.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)

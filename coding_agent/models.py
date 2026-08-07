@@ -63,6 +63,7 @@ def describe_all() -> dict[str, dict[str, str | None]]:
     return {"primary": describe("primary"), "secondary": describe("secondary")}
 
 
+##### 2. Dual-Model Architecture: Primary (creative, temp 0.8/0.2) vs Secondary (cold judge/reviewer, temp 0.0)
 def get_llm(role: Role, *, temperature: float = 0.0):
     """Return a chat model for the given role.
 
