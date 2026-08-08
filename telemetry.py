@@ -255,6 +255,13 @@ def extract_token_usage(graph_output) -> tuple[int, int]:
     (input_tokens / output_tokens) on the AIMessage. Older/community variants
     instead put Ollama's raw counters in ``response_metadata`` as
     ``prompt_eval_count`` / ``eval_count``. We try both and fall back to 0.
+    example:
+    AIMessage(
+    content="[code] OK — worktree ready at .loop/worktrees/...",  # The text string
+    name="code",
+    usage_metadata={"input_tokens": 342, "output_tokens": 85},     # Token Metadata Dict
+    response_metadata={"prompt_eval_count": 342, "eval_count": 85} # Raw Model Metadata Dict
+    )
     """
     try:
         if not isinstance(graph_output, dict):
