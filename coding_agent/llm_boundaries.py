@@ -117,6 +117,20 @@ def _llm_review(llm, state: CodingLoopState) -> ReviewVerdict:
     return invoke_structured(llm, ReviewVerdict, prompt)
 
 
+# TODO (Future Refactor / Self-Improvement Task):
+#https://docs.langchain.com/oss/python/langchain/agents
+# Migrate _run_maker from legacy AgentExecutor (langchain classic) to modern create_agent:
+#
+# Target Architecture:
+#   Replace `create_tool_calling_agent` + `AgentExecutor` with `from langchain.agents import create_agent`
+#   (or `from langgraph.prebuilt import create_react_agent`).
+#
+# Key Steps for the Coding Agent Self-Improvement Goal:
+#   1. Import `create_agent` from `langchain.agents`.
+#   2. Instantiate the agent using `create_agent(model=llm, tools=tools, system_prompt=MAKER_SYSTEM_PROMPT)`.
+#   3. Remove `AgentExecutor` instantiation and invoke the compiled LangGraph agent graph directly.
+#   4. Ensure the iteration limit (max_iterations=20) and tool error handling are preserved.
+#   5. Run `pytest coding_agent/tests/` to verify 100% test suite compatibility.
 def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
     tools = _build_maker_tools(jail, state["budgets"])
     prompt = ChatPromptTemplate.from_messages(
@@ -126,6 +140,7 @@ def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
     )
+    # https://reference.langchain.com/python/langchain-classic/agents/tool_calling_agent/base/create_tool_calling_agent
     agent = create_tool_calling_agent(llm, tools, prompt)
     # max_iterations=8 was too tight for a real multi-file change: the first
     # live self-hosted run ("Agent stopped due to max iterations" on all 4
@@ -133,6 +148,7 @@ def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
     # rag_agent/__init__.py, delete of the old file, an app.py import edit,
     # and a run_pytest check -- more tool calls than a genuine refactor-shaped
     # goal can fit in 8. Raised to a more realistic budget for multi-file work.
+    # https://reference.langchain.com/python/langchain-classic/agents/agent/AgentExecutor
     executor = AgentExecutor(agent=agent, tools=tools, max_iterations=20)
     task_message = HumanMessage(content=_maker_task_text(state))
     return executor.invoke({"messages": [task_message]})
