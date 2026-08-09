@@ -14,6 +14,8 @@ from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from langgraph.errors import GraphRecursionError
+
 from coding_agent.gates import _read_step_defs
 from coding_agent.maker_tools import _build_maker_tools, _maker_task_text
 from coding_agent.prompts import (
@@ -146,4 +148,11 @@ def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
         system_prompt=MAKER_SYSTEM_PROMPT,
     )
     task_message = HumanMessage(content=_maker_task_text(state))
-    return agent.invoke({"messages": [task_message]}, config={"recursion_limit": 20})
+    try:
+        res = agent.invoke({"messages": [task_message]}, config={"recursion_limit": 40})
+        if isinstance(res, dict) and "messages" in res and res["messages"]:
+            last_msg = res["messages"][-1]
+            res["output"] = getattr(last_msg, "content", str(last_msg))
+        return res
+    except GraphRecursionError:
+        return {"output": "Agent stopped due to max iterations.", "messages": []}
