@@ -18,6 +18,7 @@ from coding_agent.gates import _read_step_defs
 from coding_agent.maker_tools import _build_maker_tools, _maker_task_text
 from coding_agent.prompts import (
     AUTHOR_BDD_PROMPT,
+    BDD_RELEVANCE_PROMPT,
     DIAGNOSE_PROMPT,
     INTAKE_PROMPT,
     MAKER_SYSTEM_PROMPT,
@@ -27,6 +28,7 @@ from coding_agent.prompts import (
 )
 from coding_agent.schemas import (
     BddAuthorResult,
+    BddRelevanceVerdict,
     DiagnosisResult,
     PlanJudgement,
     PlanProposal,
@@ -50,6 +52,22 @@ def _llm_author_bdd(llm, state: CodingLoopState) -> BddAuthorResult:
         acceptance_criteria="\n".join(f"- {c}" for c in criteria) or "(none extracted)",
     )
     return invoke_structured(llm, BddAuthorResult, prompt)
+
+
+def _llm_check_bdd_relevance(
+    llm, state: CodingLoopState, features: list[tuple[str, str]]
+) -> BddRelevanceVerdict:
+    """Adoption gate for pre-existing `.feature` files -- see BddRelevanceVerdict.
+
+    `features` is (relative_path, text) per candidate file; the node caps the
+    text so a directory of leftovers can't blow the context window."""
+    feature_texts = "\n\n".join(f"--- {path} ---\n{text}" for path, text in features) or "(none)"
+    prompt = BDD_RELEVANCE_PROMPT.format(
+        goal=state["goal"],
+        acceptance_criteria=_criteria_text(state),
+        feature_texts=feature_texts,
+    )
+    return invoke_structured(llm, BddRelevanceVerdict, prompt)
 
 
 def _llm_diagnose(llm, state: CodingLoopState, phase: str, failure_detail: str) -> DiagnosisResult:
@@ -119,18 +137,20 @@ def _llm_review(llm, state: CodingLoopState) -> ReviewVerdict:
 
 # TODO (Future Refactor / Self-Improvement Task):
 #https://docs.langchain.com/oss/python/langchain/agents
-# Migrate _run_maker from legacy AgentExecutor (langchain classic) to modern create_agent:
-#
-# Target Architecture:
-#   Replace `create_tool_calling_agent` + `AgentExecutor` with `from langchain.agents import create_agent`
-#   (or `from langgraph.prebuilt import create_react_agent`).
-#
-# Key Steps for the Coding Agent Self-Improvement Goal:
-#   1. Import `create_agent` from `langchain.agents`.
-#   2. Instantiate the agent using `create_agent(model=llm, tools=tools, system_prompt=MAKER_SYSTEM_PROMPT)`.
-#   3. Remove `AgentExecutor` instantiation and invoke the compiled LangGraph agent graph directly.
-#   4. Ensure the iteration limit (max_iterations=20) and tool error handling are preserved.
-#   5. Run `pytest coding_agent/tests/` to verify 100% test suite compatibility.
+# Migrate `_run_maker` in coding_agent/llm_boundaries.py from the legacy
+# AgentExecutor API to create_agent.
+
+# Replace `create_tool_calling_agent` + `AgentExecutor` with
+# `from langchain.agents import create_agent`, and invoke the resulting
+# compiled graph directly.
+
+# Requirements:
+# - `create_agent` is imported from `langchain.agents`; `AgentExecutor` and
+#   `create_tool_calling_agent` no longer appear in the file.
+# - The 20-iteration cap on the maker's tool loop is preserved.
+# - Tool error handling is preserved.
+# - `_run_maker(llm, jail, state)` keeps its signature and returns the shape
+#   its caller in coding_agent/nodes.py already expects.
 def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
     tools = _build_maker_tools(jail, state["budgets"])
     prompt = ChatPromptTemplate.from_messages(

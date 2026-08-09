@@ -65,6 +65,31 @@ class BddAuthorResult(BaseModel):
     )
 
 
+class BddRelevanceVerdict(BaseModel):
+    """author_bdd's adoption gate: do the `.feature` files already present in
+    the target actually describe THIS run's goal?
+
+    Exists because of run 20260808T231438: a feature file committed by an
+    unrelated run a week earlier was adopted wholesale as the frozen definition
+    of done. Its scenarios passed on arrival, so no failing test ever drove a
+    code change, and the run escalated with an empty diff after burning two
+    sound plans."""
+
+    covers_goal: bool = Field(
+        description="True only if these scenarios actually test the stated goal and acceptance criteria. "
+        "False if they describe different behaviour, a different module, or an unrelated earlier task -- "
+        "even if they are well written and currently passing."
+    )
+    reason: str = Field(
+        description="One sentence: what these scenarios test, and why that does or does not match the goal."
+    )
+    uncovered_criteria: list[str] = Field(
+        default_factory=list,
+        description="Acceptance criteria that no adopted scenario checks. A non-empty list is strong "
+        "evidence for covers_goal=False.",
+    )
+
+
 class PlanIdea(BaseModel):
     """One candidate strategy from plan_tot's ToT propose step."""
 
