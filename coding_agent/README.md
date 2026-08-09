@@ -125,7 +125,6 @@ class CodingLoopState(TypedDict, total=False):
   2. **Failure**: `P1` fails. `diagnose_node` retires `P1` and logs lesson: *"Pool size is not the bottleneck; timeouts caused by network drops."*
   3. **Re-entry**: Surviving candidates (`P2`, `P3`) are **re-scored** with the lesson (not regenerated). `P2` score rises to 9.2 (directly targets network drops) and becomes active.
 
-
 ### 3.4 Code Generation (Maker): `code_node`
 
 * **Purpose**: Executes an LLM-driven `AgentExecutor` with access to a restricted set of filesystem and test execution tools.
@@ -176,17 +175,16 @@ class CodingLoopState(TypedDict, total=False):
 
 The agent loop enforces strict safety rails configured via `budgets` in `CodingLoopState` (and exposed in [`coding_engineer_panel.py`](file:///h:/code/yl/langgraph_ollama/ui/coding_engineer_panel.py#L60-L67)):
 
-| Budget Parameter | Default | Scope & Behavior |
-| :--- | :--- | :--- |
-| **`max_attempts_per_plan`** | `3` | Maximum retry attempts for a single active plan before `diagnose_node` marks it as `exhausted` and switches to another plan. |
-| **`max_plans`** | `3` | ToT parameter $k$: the number of distinct candidate solution plans generated during initial planning. |
-| **`max_total_attempts`** | `9` | Global hard ceiling on total code/test execution cycles across all plans combined before triggering an escalation. |
-| **`cmd_timeout_s`** | `120s` | Maximum execution time allowed for any individual shell tool command (e.g. `pytest`, `ruff`). |
-| **`wall_clock_s`** | `1800s` | Overall real-time deadline (30 mins) for the entire run. Exceeding triggers a `wall_clock` escalation exit. |
-| **`token_budget`** | `0` *(unlimited)* | Optional cap on cumulative LLM token consumption across all calls during the run. |
+| Budget Parameter                    | Default               | Scope & Behavior                                                                                                                |
+| :---------------------------------- | :-------------------- | :------------------------------------------------------------------------------------------------------------------------------ |
+| **`max_attempts_per_plan`** | `3`                 | Maximum retry attempts for a single active plan before`diagnose_node` marks it as `exhausted` and switches to another plan. |
+| **`max_plans`**             | `3`                 | ToT parameter$k$: the number of distinct candidate solution plans generated during initial planning.                          |
+| **`max_total_attempts`**    | `9`                 | Global hard ceiling on total code/test execution cycles across all plans combined before triggering an escalation.              |
+| **`cmd_timeout_s`**         | `120s`              | Maximum execution time allowed for any individual shell tool command (e.g.`pytest`, `ruff`).                                |
+| **`wall_clock_s`**          | `1800s`             | Overall real-time deadline (30 mins) for the entire run. Exceeding triggers a`wall_clock` escalation exit.                    |
+| **`token_budget`**          | `0` *(unlimited)* | Optional cap on cumulative LLM token consumption across all calls during the run.                                               |
 
 ---
-
 
 ## 4. Dual-Model Architecture (`models.py`)
 
@@ -253,8 +251,8 @@ Because the agent runs in long loops of coding, testing, and reviewing, it is de
 
 ### How to Resume a Run
 
-1. **Automatic Checkpointing**: At every node transition in the graph, LangGraph writes the entire state to the SQLite checkpointer. 
-2. **Resuming after a Crash / Streamlit Reboot**: If the Streamlit app reboots, the script crashes, or you manually halt execution, your progress is not lost. To resume, simply start a new run using the exact same **Run ID** (`run_id`). 
+1. **Automatic Checkpointing**: At every node transition in the graph, LangGraph writes the entire state to the SQLite checkpointer.
+2. **Resuming after a Crash / Streamlit Reboot**: If the Streamlit app reboots, the script crashes, or you manually halt execution, your progress is not lost. To resume, simply start a new run using the exact same **Run ID** (`run_id`).
 3. **Behavior**: The `SqliteSaver` will look up the `thread_id` matching your `run_id`, restore the graph to the exact node and state where it left off, and continue execution automatically without needing to re-plan or re-run passed tests.
 
 ---
@@ -322,6 +320,7 @@ for update in stream_run(run_id, target_dir, goal):
 ### 8.3 Archiving & Cleaning Up Worktrees
 
 **To archive a worktree before cleanup** (preserves Git metadata):
+
 ```powershell
 # Create target archive folder if it doesn't exist
 New-Item -ItemType Directory -Path .loop\archived_worktrees -Force
@@ -331,13 +330,12 @@ git worktree move .loop\worktrees\<run_id> .loop\archived_worktrees\<run_id>
 
 # Quick remove
 Get-ChildItem .loop\worktrees -Directory | Where-Object Name -ne "archived_worktrees" | ForEach-Object { git worktree remove $_.FullName --force }
-
-
 ```
 
 **To clean up remaining worktree directories** (handles both registered Git worktrees and non-Git fallback copies):
 
 **PowerShell (Windows):**
+
 ```powershell
 git worktree prune
 Get-ChildItem .loop\worktrees -Directory | ForEach-Object {
@@ -349,6 +347,7 @@ Get-ChildItem .loop\worktrees -Directory | ForEach-Object {
 ```
 
 **Bash / Git CLI:**
+
 ```bash
 git worktree prune
 ```
@@ -383,5 +382,3 @@ Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*langgraph_
 # 2. Restart the app cleanly
 uv run streamlit run app.py
 ```
-
-

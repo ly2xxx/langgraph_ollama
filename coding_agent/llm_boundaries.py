@@ -140,24 +140,10 @@ def _llm_review(llm, state: CodingLoopState) -> ReviewVerdict:
 # compiled graph instead of wrapping it in a legacy executor.
 def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
     tools = _build_maker_tools(jail, state["budgets"])
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", MAKER_SYSTEM_PROMPT),
-            MessagesPlaceholder(variable_name="messages"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ]
-    )
-    # create_agent compiles a tool-calling agent graph from the LLM + tools.
-    # recursion_limit=20 preserves the 20-iteration cap on the maker's tool
-    # loop that the old max_iterations=20 enforced.
-    # handle_tool_errors=True preserves tool error handling so a failing tool
-    # surfaces an error message to the agent instead of crashing the loop.
     agent = create_agent(
-        llm,
-        tools,
-        prompt=prompt,
-        recursion_limit=20,
-        handle_tool_errors=True,
+        model=llm,
+        tools=tools,
+        system_prompt=MAKER_SYSTEM_PROMPT,
     )
     task_message = HumanMessage(content=_maker_task_text(state))
-    return agent.invoke({"messages": [task_message]})
+    return agent.invoke({"messages": [task_message]}, config={"recursion_limit": 20})
