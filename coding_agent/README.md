@@ -372,4 +372,16 @@ Open `http://127.0.0.1:2024` in your browser to view the interactive LangGraph S
 
 ![LangGraph Studio UI](../image/README/langgraph_studio.png)
 
+### 8.5 Forced Reboot / Process Reset
+
+To forcefully kill any hanging or stuck `langgraph_ollama` / `coding_agent` Python or Streamlit sessions on Windows and restart clean:
+
+```powershell
+# 1. Force terminate all processes associated with langgraph_ollama or coding_agent
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*langgraph_ollama*" -or $_.CommandLine -like "*coding_agent*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+# 2. Restart the app cleanly
+uv run streamlit run app.py
+```
+
 
