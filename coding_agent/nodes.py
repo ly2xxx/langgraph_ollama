@@ -207,28 +207,119 @@ def _route_after_author_bdd(state: CodingLoopState) -> str:
 
 
 ##### 5. State Machine Node 2/10: BDD Authoring (Definition of done frozen before code exists)
-def author_bdd_node(state: CodingLoopState) -> dict:
-    worktree_dir = Path(state["worktree_dir"])
-    # Bug found on the first real self-hosted run: an unscoped rglob picked up
-    # coding_agent/sample_target/features/calculator.feature -- the agent's own
-    # demo fixture -- and froze it as the "definition of done" for an unrelated
-    # goal (moving rag_research_chatbot.py). Same harness-exclusion rule as
-    # self_check/bdd_gate (_harness_exclude_dirs), applied here too now.
-    harness_excludes = set(_harness_exclude_dirs(worktree_dir))
-    existing = sorted(
+
+# Cap the per-file text sent to the adoption gate: enough to judge relevance
+# from the Feature/Scenario lines, small enough that a directory full of
+# leftovers can't blow the context window.
+_MAX_ADOPT_FEATURE_CHARS = 4000
+
+
+def _adoptable_feature_paths(worktree_dir: Path) -> list[str]:
+    """`.feature` files already in the target, as adoption candidates.
+
+    Bug found on the first real self-hosted run: an unscoped rglob picked up
+    coding_agent/sample_target/features/calculator.feature -- the agent's own
+    demo fixture -- and froze it as the "definition of done" for an unrelated
+    goal (moving rag_research_chatbot.py). Same harness-exclusion rule as
+    self_check/bdd_gate (_harness_exclude_dirs), applied here too now.
+
+    `.loop` is excluded on top of that: it holds this agent's own run state,
+    including a full worktree checkout per previous run. Left in, a target that
+    had been worked on before offered up every feature file every earlier run
+    had ever frozen -- on the sample_target fixture alone that is five
+    candidates rather than one, most of them copies of contracts for goals long
+    since finished. Adoption must never see run artefacts; that is the whole
+    lesson of run 20260808T231438 (see _adopt_existing_features)."""
+    harness_excludes = set(_harness_exclude_dirs(worktree_dir)) | {".git", ".loop"}
+    return sorted(
         str(p.relative_to(worktree_dir)).replace(os.sep, "/")
         for p in worktree_dir.rglob("*.feature")
-        if ".git" not in p.parts and not harness_excludes & set(p.relative_to(worktree_dir).parts)
+        if not harness_excludes & set(p.relative_to(worktree_dir).parts)
     )
 
-    if existing:
+
+def _read_capped(path: Path, limit: int) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return text if len(text) <= limit else f"{text[:limit]}\n... (truncated)"
+
+
+def _adopt_existing_features(state: CodingLoopState, worktree_dir: Path, existing: list[str]) -> dict | None:
+    """Decide whether pre-existing feature files become this run's frozen contract.
+
+    Returns a node state-update (adopt, or escalate), or None meaning "these
+    describe some other goal -- draft fresh scenarios instead".
+
+    The harness exclusion in `_adoptable_feature_paths` stopped the agent
+    adopting its own *fixtures*, but not the artefacts of its own earlier
+    *runs*: run 20260808T231438 adopted features/rag_agent_move.feature --
+    committed to the repo by a run a week before -- as the definition of done
+    for an unrelated AgentExecutor migration. Those scenarios passed on arrival,
+    so self_check and bdd_gate were green before the maker touched anything, no
+    failing test ever drove a code change, and the run escalated with an empty
+    diff having retired two sound plans for a fault neither one caused.
+    Provenance can't be read off the filesystem, so the *content* is checked
+    against the goal instead."""
+    features = [(p, _read_capped(worktree_dir / p, _MAX_ADOPT_FEATURE_CHARS)) for p in existing]
+    llm = _eng().get_llm("secondary", temperature=0.0)  # checker role: a judgement, not authoring
+    try:
+        verdict = _eng()._llm_check_bdd_relevance(llm, state, features)
+    except StructuredOutputError as exc:
+        # Fail closed. Adopting unchecked is the bug this gate exists to stop,
+        # and silently drafting over a repo's real feature suite is its own kind
+        # of surprise -- so stop and let a human look.
         return {
-            "feature_paths": existing,
-            "status": "planning",
-            "messages": [
-                _status_message("author_bdd", True, note=f"adopted existing: {', '.join(existing)}")
-            ],
+            "status": "escalated",
+            "escalation_reason": f"author_bdd adoption check structured-output failure: {exc}",
+            "messages": [_status_message("author_bdd", False, note=str(exc)[:200])],
         }
+
+    if not verdict.covers_goal:
+        return None
+
+    adopted = existing
+    if state.get("hitl_bdd_approval"):
+        # Adoption is the one path that freezes a contract from files this run
+        # did not write and cannot vet for provenance, so it gets the human
+        # checkpoint whenever HITL is on -- not only when the model is unsure.
+        # (The authoring path pauses on `ambiguity` instead.)
+        payload = interrupt(
+            {
+                "node": "author_bdd",
+                "decision": "adopt_existing_features",
+                "reason": verdict.reason,
+                "uncovered_criteria": verdict.uncovered_criteria,
+                "feature_paths": adopted,
+            }
+        )
+        if isinstance(payload, dict):
+            if payload.get("approved") is False:
+                return {
+                    "status": "escalated",
+                    "escalation_reason": "human rejected the pre-existing BDD scenarios at author_bdd",
+                    "messages": [_status_message("author_bdd", False, note="adoption rejected by human")],
+                }
+            adopted = payload.get("feature_paths", adopted)
+
+    return {
+        "feature_paths": adopted,
+        "status": "planning",
+        "messages": [_status_message("author_bdd", True, note=f"adopted existing: {', '.join(adopted)}")],
+    }
+
+
+def author_bdd_node(state: CodingLoopState) -> dict:
+    worktree_dir = Path(state["worktree_dir"])
+    existing = _adoptable_feature_paths(worktree_dir)
+
+    if existing:
+        adopted = _adopt_existing_features(state, worktree_dir, existing)
+        if adopted is not None:
+            return adopted
+        # Fall through and draft fresh scenarios. The rejected files stay on
+        # disk and bdd_gate will still collect them (it scopes by directory),
+        # but they are no longer the contract -- and since the drafted scenarios
+        # fail until the goal is actually implemented, the gate can no longer go
+        # vacuously green on someone else's passing tests.
 
     llm = _eng().get_llm("primary", temperature=0.3)
     try:

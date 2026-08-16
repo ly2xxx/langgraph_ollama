@@ -7,9 +7,11 @@ and `_run_maker`), which are monkeypatched so the suite runs without a live
 Ollama server. See CODING_ENGINEER.md and PHASED_PLAN.md for why those two
 functions are the deliberate mock boundary.
 
-`author_bdd` needs no mock here: the sample_target fixture already ships a
-real features/calculator.feature, so author_bdd's "adopt existing" path
-(no LLM call) is what actually runs.
+`author_bdd` needs no *authoring* mock here: the sample_target fixture already
+ships a real features/calculator.feature, so author_bdd's "adopt existing" path
+is what actually runs. That path does now make one LLM call — the adoption
+relevance gate — which `_mock_bdd_relevance` defaults to "yes, these cover the
+goal" for the many tests that only care about loop mechanics.
 """
 
 import shutil
@@ -91,6 +93,35 @@ def _mock_phase3_llms(monkeypatch):
     monkeypatch.setattr(
         "coding_agent.engine._llm_review",
         lambda llm, state: ReviewVerdict(verdict="approve", findings=[]),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _mock_bdd_relevance(monkeypatch):
+    """author_bdd's adoption gate calls the model to check that pre-existing
+    feature files actually describe THIS goal. The kata fixture's
+    features/calculator.feature genuinely does, so default it to True and let
+    the tests that exercise the gate itself override."""
+    from coding_agent.schemas import BddRelevanceVerdict
+
+    monkeypatch.setattr(
+        "coding_agent.engine._llm_check_bdd_relevance",
+        lambda llm, state, features: BddRelevanceVerdict(
+            covers_goal=True, reason="scenarios test the kata under test"
+        ),
+    )
+
+
+def _mock_bdd_relevance_verdict(monkeypatch, covers_goal, uncovered=()):
+    from coding_agent.schemas import BddRelevanceVerdict
+
+    monkeypatch.setattr(
+        "coding_agent.engine._llm_check_bdd_relevance",
+        lambda llm, state, features: BddRelevanceVerdict(
+            covers_goal=covers_goal,
+            reason="matches" if covers_goal else "these scenarios test an unrelated earlier goal",
+            uncovered_criteria=list(uncovered),
+        ),
     )
 
 
@@ -501,6 +532,139 @@ def test_author_bdd_does_not_pause_when_hitl_off_even_if_ambiguous(kata_target, 
     final = _invoke(kata_target, "do the ambiguous thing", "run-hitl-3")  # hitl defaults off
     assert "__interrupt__" not in final
     assert final["status"] == "done"
+
+
+# -- author_bdd adoption gate --------------------------------------------
+
+
+def test_adoption_scan_ignores_agent_run_artefacts(tmp_path):
+    """`.loop` holds a full worktree checkout per previous run. Scanning it
+    offers up every contract every earlier run ever froze -- the exact class of
+    stale artefact the adoption gate exists to keep out."""
+    from coding_agent.nodes import _adoptable_feature_paths
+
+    (tmp_path / "features").mkdir()
+    (tmp_path / "features" / "real.feature").write_text("Feature: this run's goal\n")
+    stale = tmp_path / ".loop" / "worktrees" / "20260101T000000-abcd1234" / "features"
+    stale.mkdir(parents=True)
+    (stale / "finished.feature").write_text("Feature: a goal from last week\n")
+
+    assert _adoptable_feature_paths(tmp_path) == ["features/real.feature"]
+
+
+def test_irrelevant_existing_features_are_not_adopted(kata_target, monkeypatch):
+    """The run-20260808T231438 regression: a feature file left behind by an
+    earlier, unrelated run must not become this run's definition of done just
+    because it is sitting in the repo. The gate rejects it and author_bdd
+    drafts its own scenarios instead."""
+    _mock_suitable_intake(monkeypatch)
+    _mock_bdd_relevance_verdict(monkeypatch, covers_goal=False, uncovered=KATA_ACCEPTANCE_CRITERIA)
+    _mock_author_bdd(monkeypatch, ambiguity=False)
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-adopt-reject")
+
+    # drafted, NOT adopted -- the stale calculator.feature is still on disk but
+    # is no longer the contract
+    assert final["feature_paths"] == ["features/trivial.feature"]
+    assert final["status"] == "done"
+
+
+def test_relevant_existing_features_are_still_adopted(kata_target, monkeypatch):
+    """The gate is a filter, not a ban: when the existing scenarios really do
+    describe the goal, adoption still happens and no drafting LLM call is made."""
+    _mock_suitable_intake(monkeypatch)
+    _mock_bdd_relevance_verdict(monkeypatch, covers_goal=True)
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])
+
+    def _explode(llm, state):
+        raise AssertionError("author_bdd drafted scenarios instead of adopting the existing ones")
+
+    monkeypatch.setattr("coding_agent.engine._llm_author_bdd", _explode)
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-adopt-accept")
+
+    assert final["feature_paths"] == ["features/calculator.feature"]
+    assert final["status"] == "done"
+
+
+def test_adoption_gate_escalates_when_relevance_check_fails(kata_target, monkeypatch):
+    """Fail closed: if the gate's own structured output can't be parsed, stop.
+    Adopting unchecked is the bug the gate exists to prevent, and silently
+    drafting over a repo's real feature suite is its own surprise."""
+    from coding_agent.structured import StructuredOutputError
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])
+
+    def _boom(llm, state, features):
+        raise StructuredOutputError("model returned prose")
+
+    monkeypatch.setattr("coding_agent.engine._llm_check_bdd_relevance", _boom)
+
+    final = _invoke(kata_target, "Implement the string-calculator kata.", "run-adopt-boom")
+
+    assert final["status"] == "escalated"
+    assert "adoption check" in final["escalation_reason"]
+
+
+def test_adopt_pauses_for_human_when_hitl_on(kata_target, monkeypatch):
+    """§4 kill/approve, adoption arm: adoption freezes a contract from files
+    this run did not write and cannot vet for provenance, so with HITL on it
+    always pauses -- not only when the model is unsure."""
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.types import Command
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_bdd_relevance_verdict(monkeypatch, covers_goal=True)
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])
+
+    graph = build_graph(checkpointer=MemorySaver())
+    config = {"configurable": {"thread_id": "run-adopt-hitl"}, "recursion_limit": 150}
+    initial = {
+        "run_id": "run-adopt-hitl",
+        "target_dir": str(kata_target),
+        "goal": "Implement the string-calculator kata.",
+        "hitl_bdd_approval": True,
+        "budgets": {},
+    }
+
+    graph.invoke(initial, config=config)
+    assert _is_paused(graph, config)  # halted before freezing someone else's scenarios
+
+    resumed = graph.invoke(Command(resume={"approved": True}), config=config)
+    assert resumed["status"] == "done"
+    assert resumed["feature_paths"] == ["features/calculator.feature"]
+
+
+def test_human_can_reject_adopted_features(kata_target, monkeypatch):
+    """The human checkpoint has to be able to say no -- otherwise it is a
+    notification, not an approval. This is the five seconds that would have
+    stopped run 20260808T231438."""
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.types import Command
+
+    _mock_suitable_intake(monkeypatch)
+    _mock_bdd_relevance_verdict(monkeypatch, covers_goal=True)
+    _mock_maker_sequence(monkeypatch, [CORRECT_CALCULATOR])
+
+    graph = build_graph(checkpointer=MemorySaver())
+    config = {"configurable": {"thread_id": "run-adopt-veto"}, "recursion_limit": 150}
+    graph.invoke(
+        {
+            "run_id": "run-adopt-veto",
+            "target_dir": str(kata_target),
+            "goal": "Implement the string-calculator kata.",
+            "hitl_bdd_approval": True,
+            "budgets": {},
+        },
+        config=config,
+    )
+    assert _is_paused(graph, config)
+
+    resumed = graph.invoke(Command(resume={"approved": False}), config=config)
+    assert resumed["status"] == "escalated"
+    assert "human rejected" in resumed["escalation_reason"]
 
 
 def test_killed_run_resumes_from_sqlite_checkpoint(kata_target, monkeypatch):

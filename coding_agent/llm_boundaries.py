@@ -10,14 +10,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+from langgraph.errors import GraphRecursionError
 
 from coding_agent.gates import _read_step_defs
 from coding_agent.maker_tools import _build_maker_tools, _maker_task_text
 from coding_agent.prompts import (
     AUTHOR_BDD_PROMPT,
+    BDD_RELEVANCE_PROMPT,
     DIAGNOSE_PROMPT,
     INTAKE_PROMPT,
     MAKER_SYSTEM_PROMPT,
@@ -27,6 +30,7 @@ from coding_agent.prompts import (
 )
 from coding_agent.schemas import (
     BddAuthorResult,
+    BddRelevanceVerdict,
     DiagnosisResult,
     PlanJudgement,
     PlanProposal,
@@ -50,6 +54,22 @@ def _llm_author_bdd(llm, state: CodingLoopState) -> BddAuthorResult:
         acceptance_criteria="\n".join(f"- {c}" for c in criteria) or "(none extracted)",
     )
     return invoke_structured(llm, BddAuthorResult, prompt)
+
+
+def _llm_check_bdd_relevance(
+    llm, state: CodingLoopState, features: list[tuple[str, str]]
+) -> BddRelevanceVerdict:
+    """Adoption gate for pre-existing `.feature` files -- see BddRelevanceVerdict.
+
+    `features` is (relative_path, text) per candidate file; the node caps the
+    text so a directory of leftovers can't blow the context window."""
+    feature_texts = "\n\n".join(f"--- {path} ---\n{text}" for path, text in features) or "(none)"
+    prompt = BDD_RELEVANCE_PROMPT.format(
+        goal=state["goal"],
+        acceptance_criteria=_criteria_text(state),
+        feature_texts=feature_texts,
+    )
+    return invoke_structured(llm, BddRelevanceVerdict, prompt)
 
 
 def _llm_diagnose(llm, state: CodingLoopState, phase: str, failure_detail: str) -> DiagnosisResult:
@@ -117,38 +137,22 @@ def _llm_review(llm, state: CodingLoopState) -> ReviewVerdict:
     return invoke_structured(llm, ReviewVerdict, prompt)
 
 
-# TODO (Future Refactor / Self-Improvement Task):
-#https://docs.langchain.com/oss/python/langchain/agents
-# Migrate _run_maker from legacy AgentExecutor (langchain classic) to modern create_agent:
-#
-# Target Architecture:
-#   Replace `create_tool_calling_agent` + `AgentExecutor` with `from langchain.agents import create_agent`
-#   (or `from langgraph.prebuilt import create_react_agent`).
-#
-# Key Steps for the Coding Agent Self-Improvement Goal:
-#   1. Import `create_agent` from `langchain.agents`.
-#   2. Instantiate the agent using `create_agent(model=llm, tools=tools, system_prompt=MAKER_SYSTEM_PROMPT)`.
-#   3. Remove `AgentExecutor` instantiation and invoke the compiled LangGraph agent graph directly.
-#   4. Ensure the iteration limit (max_iterations=20) and tool error handling are preserved.
-#   5. Run `pytest coding_agent/tests/` to verify 100% test suite compatibility.
+# Migrated from the legacy tool-calling agent API to the modern create_agent
+# API. create_agent compiles a LangGraph runnable directly; we invoke that
+# compiled graph instead of wrapping it in a legacy executor.
 def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
     tools = _build_maker_tools(jail, state["budgets"])
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", MAKER_SYSTEM_PROMPT),
-            MessagesPlaceholder(variable_name="messages"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ]
+    agent = create_agent(
+        model=llm,
+        tools=tools,
+        system_prompt=MAKER_SYSTEM_PROMPT,
     )
-    # https://reference.langchain.com/python/langchain-classic/agents/tool_calling_agent/base/create_tool_calling_agent
-    agent = create_tool_calling_agent(llm, tools, prompt)
-    # max_iterations=8 was too tight for a real multi-file change: the first
-    # live self-hosted run ("Agent stopped due to max iterations" on all 4
-    # attempts) needed read+write on rag_research_chatbot.py, a new
-    # rag_agent/__init__.py, delete of the old file, an app.py import edit,
-    # and a run_pytest check -- more tool calls than a genuine refactor-shaped
-    # goal can fit in 8. Raised to a more realistic budget for multi-file work.
-    # https://reference.langchain.com/python/langchain-classic/agents/agent/AgentExecutor
-    executor = AgentExecutor(agent=agent, tools=tools, max_iterations=20)
     task_message = HumanMessage(content=_maker_task_text(state))
-    return executor.invoke({"messages": [task_message]})
+    try:
+        res = agent.invoke({"messages": [task_message]}, config={"recursion_limit": 40})
+        if isinstance(res, dict) and "messages" in res and res["messages"]:
+            last_msg = res["messages"][-1]
+            res["output"] = getattr(last_msg, "content", str(last_msg))
+        return res
+    except GraphRecursionError:
+        return {"output": "Agent stopped due to max iterations.", "messages": []}

@@ -10,11 +10,10 @@ from __future__ import annotations
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import MessagesPlaceholder
 from langchain_core.tools import tool
-from langchain.agents import AgentExecutor, create_tool_calling_agent
 
 from coding_agent.prompts import MAKER_SYSTEM_PROMPT
 from coding_agent.state import Budgets, CodingLoopState
-from coding_agent.tools.code_exec import Jail, run_command
+from coding_agent.tools.code_exec import Jail, JailViolation, run_command
 
 
 def _build_maker_tools(jail: Jail, budgets: Budgets) -> list:

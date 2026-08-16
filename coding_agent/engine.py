@@ -102,6 +102,7 @@ from coding_agent.llm_boundaries import (  # noqa: F401
     _criteria_text,
     _lessons_block,
     _llm_author_bdd,
+    _llm_check_bdd_relevance,
     _llm_diagnose,
     _llm_judge_plans,
     _llm_parse_target_spec,
