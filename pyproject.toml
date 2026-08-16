@@ -3,17 +3,18 @@ name = "langgraph-ollama"
 version = "0.1.0"
 description = "LangGraph + Ollama multi-agent / RAG experiments"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = [
-    # LangChain 0.3.x stack
-    "langchain>=0.3,<0.4",
-    "langchain-core>=0.3,<0.4",
-    "langchain-community>=0.3,<0.4",
-    "langchain-text-splitters>=0.3,<0.4",
+    # LangChain 1.x stack
+    "langchain>=1.0",
+    "langchain-core>=0.3",
+    "langchain-community>=0.3",
+    "langchain-text-splitters>=0.3",
     "langchain-ollama>=0.2",
-    # LangGraph 0.3.x + sqlite checkpointer (now a separate package)
-    "langgraph>=0.3,<0.4",
+    # LangGraph stack + sqlite checkpointer + CLI
+    "langgraph>=0.4",
     "langgraph-checkpoint-sqlite>=2",
+    "langgraph-cli[inmem]",
     # App / UI
     "streamlit",
     "pillow",

@@ -2,7 +2,7 @@ from datetime import datetime
 # import json5 as json
 import json
 
-from langgraph.graph import Graph
+from langgraph.graph import END, StateGraph
 
 # from langchain.adapters.openai import convert_openai_messages
 from langchain_community.adapters.openai import convert_openai_messages
@@ -261,7 +261,7 @@ class ArticleWriterStateMachine:
         output_agent=OutputAgent()
         human_review=HumanReviewAgent()
 
-        workflow = Graph()
+        workflow = StateGraph(dict)
 
         workflow.add_node(start_agent.name,start_agent.run)
         workflow.add_node("input",input_agent.run)
@@ -282,7 +282,7 @@ class ArticleWriterStateMachine:
         )              
         
         workflow.set_entry_point(start_agent.name)
-        workflow.set_finish_point("output")
+        workflow.add_edge("output", END)
         
         self.thread={"configurable": {"thread_id": "2"}}
         self.chain=workflow.compile(checkpointer=self.memory,interrupt_after=[start_agent.name,"critique"])

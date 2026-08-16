@@ -39,6 +39,28 @@ would produce materially different scenarios — this is a last resort, not a ro
 the agent is expected to act autonomously, so prefer proceeding over pausing."""
 
 
+BDD_RELEVANCE_PROMPT = """You are the adoption gate for an autonomous coding agent. The target \
+directory already contains Gherkin feature files. Before they are frozen as this run's definition \
+of done, decide whether they actually describe THIS goal.
+
+Be strict. These files may be leftovers from an earlier, unrelated run against the same repository. \
+A feature file that is well written, currently passing, and about a completely different module is \
+exactly the failure you are here to catch: adopt it and every gate goes green without a single line \
+of the goal being implemented. That the scenarios pass right now is evidence AGAINST relevance, not \
+for it.
+
+Set covers_goal=True only if someone reading these scenarios alone would recognise them as a test of \
+the goal below, and the acceptance criteria are substantially covered. When in doubt answer False: \
+drafting fresh scenarios is cheap, whereas a wrong adoption wastes the entire run.
+
+Goal: {goal}
+Acceptance criteria:
+{acceptance_criteria}
+
+Existing feature files:
+{feature_texts}"""
+
+
 PLAN_PROPOSE_PROMPT = """You are the planner in an autonomous coding agent. Propose {k} genuinely \
 DIFFERENT strategies for achieving the goal — not rewordings of one idea, but distinct approaches \
 (e.g. different decompositions, orders, or techniques). Each plan is a short ordered list of \

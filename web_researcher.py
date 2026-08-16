@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.agents import create_agent
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_ollama import ChatOllama
@@ -29,31 +29,26 @@ def scrape_webpages(urls: List[str]) -> str:
         ]
     )
 
-def create_agent(
+def create_worker_agent(
     llm: ChatOllama,
     tools: list,
     system_prompt: str,
-) -> AgentExecutor:
+):
     """Create a tool-calling agent and add it to the graph."""
     system_prompt += "\nWork autonomously according to your specialty, using the tools available to you."
     system_prompt += " Do not ask for clarification."
     system_prompt += " Your other team members (and other teams) will collaborate with you with their own specialties."
     system_prompt += " You are chosen for a reason! Do your best."
     
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            MessagesPlaceholder(variable_name="messages"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ]
-    )
-    agent = create_tool_calling_agent(llm, tools, prompt)
-    executor = AgentExecutor(agent=agent, tools=tools)
-    return executor
+    return create_agent(model=llm, tools=tools, system_prompt=system_prompt)
 
 def agent_node(state, agent, name):
     result = agent.invoke(state)
-    return {"messages": [HumanMessage(content=result["output"], name=name)]}
+    if isinstance(result, dict) and "messages" in result and result["messages"]:
+        content = result["messages"][-1].content
+    else:
+        content = result.get("output", str(result))
+    return {"messages": [HumanMessage(content=content, name=name)]}
 
 def create_team_supervisor(llm: ChatOllama, system_prompt: str, members: List[str]):
     """An LLM-based router."""
@@ -90,14 +85,14 @@ class ResearchTeamState(TypedDict):
     next: str
 
 def create_researcher_graph_workflow(llm: ChatOllama):
-    search_agent = create_agent(
+    search_agent = create_worker_agent(
         llm,
         [tavily_tool],
         "You are a research assistant who can search for up-to-date info using the tavily search engine.",
     )
     search_node = functools.partial(agent_node, agent=search_agent, name="Search")
 
-    research_agent = create_agent(
+    research_agent = create_worker_agent(
         llm,
         [scrape_webpages],
         "You are a research assistant who can scrape specified urls for more detailed information using the scrape_webpages function.",

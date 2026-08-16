@@ -20,10 +20,7 @@ from web_research_prompts import RAG_SYSTEM_PROMPT
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # from langchain_openai import ChatOpenAI
-from langchain.agents import (
-    AgentExecutor,
-    create_openai_tools_agent,
-)  # create_react_agent #create_openai_tools_agent
+from langchain.agents import create_agent
 import functools
 import streamlit as st
 
@@ -76,15 +73,16 @@ class RAGResearchChatbot:
             {
                 "messages": [
                     HumanMessage(
-                        content=f"Query: {state['query']}\nFile Path: {state['file_path']}"
+                        content=f"Query: {state.get('query', '')}\nFile Path: {state.get('file_path', '')}"
                     )
-                ],
-                "query": state["query"],
-                "file_path": state["file_path"],
-                "tools": tools,
+                ]
             }
         )
-        return {"summary": response["output"]}
+        if isinstance(response, dict) and "messages" in response and response["messages"]:
+            summary_text = response["messages"][-1].content
+        else:
+            summary_text = response.get("output", str(response))
+        return {"summary": summary_text}
 
     def call_model(self, state: State):
         summary = state.get("summary", "")
@@ -140,19 +138,8 @@ class RAGResearchChatbot:
         return {"messages": [HumanMessage(content=result["output"], name=name)]}
 
     def create_agent(self, llm: ChatOllama, tools: list, system_prompt: str):
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system_prompt),
-                MessagesPlaceholder(variable_name="messages"),
-                MessagesPlaceholder(variable_name="agent_scratchpad"),
-            ]
-        )
-        agent = create_openai_tools_agent(llm, tools, prompt)
-        # TODO: Convert legacy AgentExecutor to modern LangGraph solution:
-        # 1. `from langgraph.prebuilt import create_react_agent` (top-level import, not deprecated chat_agent_executor submodule)
-        # 2. Or explicit graph nodes using `ToolNode` & `tools_condition`
-        executor = AgentExecutor(agent=agent, tools=tools)
-        return executor
+        agent = create_agent(model=llm, tools=tools, system_prompt=system_prompt)
+        return agent
 
     def create_rag_research_chatbot_graph(self):
         # rag_agent = self.create_agent(self.LLM, [rag_query], RAG_SYSTEM_PROMPT)
