@@ -60,7 +60,7 @@ def test_coordinator_delegates_task_to_a2a_harness(a2a_server_url):
     assert "completed" in result_str.lower()
     assert "delegation_log" in result
     assert result["delegation_log"][0]["delegated"] is True
-    print(f"Delegation successful — coordinator delegated task to harness via A2A")
+    print("Delegation successful — coordinator delegated task to harness via A2A")
     print(f"Result: {result}")
 
 
@@ -106,6 +106,6 @@ if __name__ == "__main__":
     )
 
     print(f"Coordinator delegated task to Coding Engineer harness via A2A at {url}")
-    print(f"Task delegation completed successfully")
+    print("Task delegation completed successfully")
     print(f"Result retrieved from harness: {json.dumps(result, default=str)}")
     print("End-to-end A2A delegation test passed!")

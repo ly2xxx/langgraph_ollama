@@ -10,10 +10,18 @@ import importlib
 import subprocess
 import sys
 import os
+from pathlib import Path
 import time
 import threading
 import socket
 import glob
+
+# Ensure worktree root is in sys.path
+_ROOT = str(Path(__file__).resolve().parent.parent.parent)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+if os.getcwd() not in sys.path:
+    sys.path.insert(0, os.getcwd())
 
 scenarios("../a2a_coordinator.feature")
 
@@ -176,8 +184,8 @@ def a2a_server_created(harness_module):
         "app/create_app/build_app/create_server/application attribute"
     )
 
-    # If it's a factory function, call it
-    if callable(app) and not hasattr(app, "get") and not hasattr(app, "test_client"):
+    # If it's a factory function (not an ASGI application instance), call it
+    if callable(app) and not hasattr(app, "routes") and not hasattr(app, "router") and not hasattr(app, "get") and not hasattr(app, "test_client"):
         app = app()
 
     return app
