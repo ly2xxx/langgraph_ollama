@@ -1,6 +1,6 @@
-# Containerization and Rancher Deployment Plan for LangGraph Streamlit App
+# Containerization and Rancher Deployment Guide for LangGraph Streamlit App
 
-This document provides an end-to-end guide to containerize the LangGraph Multi-Agent Streamlit application (`app.py`) and deploy it to your local Rancher-managed Kubernetes cluster (**`ai-demo-cluster`**) at `https://rancher.localhost:8443/`.
+This document provides a step-by-step guide to containerize the LangGraph Multi-Agent Streamlit application (`app.py`), create a local **`k3d`** cluster, import it into **Rancher** (`https://rancher.localhost:8443/`), and deploy via **Helm** (or raw Kubernetes manifests).
 
 ---
 
@@ -13,8 +13,9 @@ flowchart TD
         RANCHER["Rancher Server (https://rancher.localhost:8443/)"]
     end
 
-    subgraph K8S["Kubernetes Cluster (ai-demo-cluster)"]
-        INGRESS["Ingress (Traefik / NGINX)\nstreamlit.localhost"]
+    subgraph K3D["k3d Cluster: ai-demo (ai-demo-cluster)"]
+        LB["k3d LoadBalancer (:8089 -> :80, :9443 -> :443)"]
+        INGRESS["Ingress (Traefik)\nHost: streamlit.localhost"]
         SVC["Service: langgraph-ollama\n(ClusterIP :8501)"]
         
         subgraph Pod["Pod: langgraph-ollama"]
@@ -27,19 +28,19 @@ flowchart TD
     end
 
     User -->|Browser| RANCHER
-    User -->|Browser| INGRESS
-    INGRESS --> SVC --> STREAMLIT
+    User -->|http://streamlit.localhost:8089| LB
+    LB --> INGRESS --> SVC --> STREAMLIT
     STREAMLIT -.->|host.docker.internal:11434| OLLAMA
     CM -.-> STREAMLIT
     SEC -.-> STREAMLIT
-    RANCHER -->|Manages Apps, Scaling, Logs, Metrics| K8S
+    RANCHER -->|Manages Apps, Scaling, Logs, Metrics| K3D
 ```
 
 ### Key Considerations
-1. **Host-to-Container Networking**: The containerized app inside Kubernetes reaches Ollama on the host via `http://host.docker.internal:11434` (configurable via `ollama.baseUrl` in Helm or `OLLAMA_BASE_URL` in ConfigMap).
-2. **System Dependencies**: The app requires `graphviz` for rendering LangGraph flowcharts and document extraction packages.
-3. **Streamlit Configuration**: Headless mode, custom port `8501`, CORS/XSRF settings configured to work smoothly behind Rancher / Ingress reverse proxies.
-4. **Health Checks**: Streamlit native health check endpoint `/_stcore/health` wired into `livenessProbe` and `readinessProbe`.
+1. **Host-to-Container Networking**: The containerized app inside Kubernetes reaches Ollama on the host via `http://host.docker.internal:11434`.
+2. **Port Conflict Avoidance**: Rancher is already using port `8443`. We map k3d load balancer ports to **`8089:80`** and **`9443:443`** to avoid port collisions.
+3. **Local Docker Image in k3d**: `k3d` runs its own containerd runtime, so locally built Docker images must be imported using `k3d image import`.
+4. **Streamlit Ingress & WebSockets**: Ingress is configured with WebSocket timeouts and routes through `http://streamlit.localhost:8089/`.
 
 ---
 
@@ -50,7 +51,7 @@ Leverages the official `ghcr.io/astral-sh/uv` binary for ultra-fast, reproducibl
 - Base: `python:3.12-slim-bookworm`
 - Fast dependency installer: `COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/`
 - OS Dependencies: `graphviz`, `curl`, `build-essential`
-- Locked environment sync: `uv sync --frozen --no-dev --extra observability` (exact match with `uv.lock`)
+- Locked environment sync: `uv sync --frozen --no-dev --extra observability`
 - Virtualenv in `/app/.venv` added to `PATH` (`ENV PATH="/app/.venv/bin:$PATH"`)
 - Dedicated non-root user `appuser` (UID 10001) with direct `COPY --chown=appuser:appuser` (eliminates slow `chown -R` step)
 - Expose port `8501`
@@ -62,124 +63,88 @@ Excludes `.venv`, git caches, `.env` files, logs, and build caches to ensure cle
 
 ---
 
-## 3. Building the Container Image
+## 3. Step-by-Step Setup & Deployment
 
-Run from the repository root:
-```bash
-docker build -f docker/Dockerfile -t langgraph-ollama:latest .
-```
-
-*Smoke test locally:*
-```bash
-docker run --rm -p 8501:8501 -e OLLAMA_BASE_URL=http://host.docker.internal:11434 langgraph-ollama:latest
+### Step 1: Create the `k3d` Cluster (`ai-demo`)
+Run in PowerShell:
+```powershell
+k3d cluster create ai-demo `
+  --api-port 6551 `
+  -p "8089:80@loadbalancer" `
+  -p "9443:443@loadbalancer" `
+  --agents 1
 ```
 
 ---
 
-## 4. Deployment Option 1: Helm Chart (Recommended for Rancher)
+### Step 2: Build the Container Image & Import into k3d
+1. Build the Docker image locally:
+   ```bash
+   docker build -f docker/Dockerfile -t langgraph-ollama:latest .
+   ```
+2. Import the image into the `k3d` cluster (so Kubernetes pods can pull it locally):
+   ```bash
+   k3d image import langgraph-ollama:latest -c ai-demo
+   ```
+
+---
+
+### Step 3: Import Cluster into Rancher (`https://rancher.localhost:8443/`)
+1. Open Rancher in your browser: `https://rancher.localhost:8443/`.
+2. Go to **Global Apps / Clusters** -> **Add Cluster** -> select **Generic (Import Existing Cluster)**.
+3. Enter cluster name: `ai-demo-cluster`.
+4. Click **Create** and copy the registration command shown on screen, for example:
+   ```bash
+   kubectl apply -f https://rancher.localhost:8443/v3/import/<token>.yaml
+   ```
+   *(If using self-signed certificates, use the curl/insecure variant provided by Rancher)*.
+5. Wait for Rancher to connect and transition `ai-demo-cluster` to **Active**.
+
+---
+
+### Step 4: Deploy the Application
+
+#### Option A: Deploy via Helm (Recommended for Rancher)
 
 The Helm chart is located under [`helm/langgraph-ollama/`](file:///H:/code/yl/langgraph_ollama/helm/langgraph-ollama).
 
-### 4.1 Chart Structure
-```text
-helm/langgraph-ollama/
-├── Chart.yaml                  # Chart metadata (version 0.1.0)
-├── values.yaml                 # Default configuration values
-└── templates/
-    ├── _helpers.tpl            # Helper templates and standard labels
-    ├── deployment.yaml         # Deployment with probes and resource limits
-    ├── service.yaml            # ClusterIP Service (port 8501)
-    ├── configmap.yaml          # ConfigMap (Ollama base URL and model)
-    ├── secret.yaml             # Secret (Tavily API key)
-    ├── ingress.yaml            # Ingress with WebSocket annotations
-    └── hpa.yaml                # Optional Horizontal Pod Autoscaler
-```
-
-### 4.2 Key Settings in `values.yaml`
-```yaml
-replicaCount: 1
-
-image:
-  repository: langgraph-ollama
-  tag: "latest"
-  pullPolicy: IfNotPresent
-
-ollama:
-  baseUrl: "http://host.docker.internal:11434"
-  model: "glm-5.2:cloud"
-
-tavily:
-  apiKey: "your_tavily_api_key_here"
-
-ingress:
-  enabled: true
-  hosts:
-    - host: streamlit.localhost
-      paths:
-        - path: /
-          pathType: Prefix
-```
-
-### 4.3 Deploy via Helm CLI
-```bash
-# 1. Create namespace (if not existing)
-kubectl create namespace ai-apps
+```powershell
+# 1. Create namespace
+kubectl create namespace ai-apps --dry-run=client -o yaml | kubectl apply -f -
 
 # 2. Install / Upgrade the Helm chart
-helm upgrade --install langgraph-app ./helm/langgraph-ollama \
-  --namespace ai-apps \
-  --set tavily.apiKey="YOUR_ACTUAL_TAVILY_KEY"
+helm upgrade --install langgraph-app ./helm/langgraph-ollama `
+  --namespace ai-apps `
+  --set tavily.apiKey="YOUR_TAVILY_API_KEY"
 
 # 3. Check deployment status
 kubectl get pods,svc,ingress -n ai-apps
 ```
 
-### 4.4 Deploy / Manage via Rancher UI (`https://rancher.localhost:8443/`)
+#### Option B: Deploy via Static Manifests (`k8s/`)
 
-1. **Open Cluster**: Navigate to `https://rancher.localhost:8443/` and select **`ai-demo-cluster`**.
-2. **Apps & Marketplace**:
-   - Go to **Apps** -> **Installed Apps**.
-   - If using Helm repositories or Git repos in Rancher, add this repository under **Apps -> Repositories**.
-   - You can configure the `values.yaml` directly in the visual UI editor in Rancher.
-3. **Workload Management**:
-   - In **Workloads** -> **Deployments**, inspect `langgraph-app` pods, view live logs, access pod shells, and monitor CPU/Memory metrics.
-   - Adjust replica counts with a single click in Rancher.
-
----
-
-## 5. Deployment Option 2: Static Kubernetes Manifests (`k8s/`)
-
-If you prefer applying static YAML files without Helm, raw manifests are provided in [`k8s/`](file:///H:/code/yl/langgraph_ollama/k8s).
-
-### 5.1 Manifest Files
-- `k8s/namespace.yaml`: Defines `ai-apps` namespace
-- `k8s/configmap.yaml`: `OLLAMA_MODEL` and `OLLAMA_BASE_URL`
-- `k8s/secret.yaml`: `TAVILY_API_KEY`
-- `k8s/deployment.yaml`: Deployment spec with probes and resources
-- `k8s/service.yaml`: ClusterIP service on port 8501
-- `k8s/ingress.yaml`: Ingress with WebSocket annotations
-- `k8s/kustomization.yaml`: Kustomize aggregation bundle
-
-### 5.2 Deploy via `kubectl`
-```bash
-# Apply all manifests via Kustomize
+If you prefer applying static YAML files:
+```powershell
 kubectl apply -k k8s/
-
-# Verify
-kubectl get all -n ai-apps
 ```
 
 ---
 
-## 6. Accessing and Verifying the Application
+## 4. Accessing and Verifying the Application
 
-1. **Access via Ingress**:
-   - Open `http://streamlit.localhost/` (or your ingress controller port).
-2. **Access via Port-Forward (Direct Debugging)**:
-   ```bash
-   kubectl port-forward svc/langgraph-app-langgraph-ollama 8501:8501 -n ai-apps
-   ```
-   Open `http://localhost:8501/` in your browser.
-3. **End-to-End Agent Verification**:
-   - Select **RAG Chatbot Agent** and test a query to confirm Ollama communication.
-   - Select **Internet Researcher** to verify Tavily search integration.
+### 1. Access via Ingress (k3d Load Balancer)
+Open in your browser:
+```text
+http://streamlit.localhost:8089/
+```
+
+### 2. Access via Port-Forward (Direct Debugging)
+```powershell
+kubectl port-forward svc/langgraph-app-langgraph-ollama 8501:8501 -n ai-apps
+```
+Then navigate to `http://localhost:8501/`.
+
+### 3. End-to-End Functional Test
+- **RAG Chatbot Agent**: Test queries like `"Search my notes: what is the logical execution order of a SQL SELECT query?"` to verify connectivity to Ollama on host port 11434.
+- **Internet Researcher**: Test queries to verify Tavily search and agent loop execution.
+- **Rancher Dashboard**: Monitor live CPU/Memory utilization, view real-time streaming logs, and scale replicas directly from the Rancher UI.
