@@ -17,7 +17,7 @@ flowchart TD
         LB["k3d LoadBalancer (:8089 -> :80, :9443 -> :443)"]
         INGRESS["Ingress (Traefik)\nHost: streamlit.localhost"]
         SVC["Service: langgraph-ollama\n(ClusterIP :8501)"]
-        
+      
         subgraph Pod["Pod: langgraph-ollama"]
             STREAMLIT["Streamlit App (:8501)\n(LangGraph + RAG + Agents)"]
             PROBES["Health Check: /_stcore/health"]
@@ -37,6 +37,7 @@ flowchart TD
 ```
 
 ### Key Considerations
+
 1. **Host-to-Container Networking**: The containerized app inside Kubernetes reaches Ollama on the host via `http://host.docker.internal:11434`.
 2. **Port Conflict Avoidance**: Rancher is already using port `8443`. We map k3d load balancer ports to **`8089:80`** and **`9443:443`** to avoid port collisions.
 3. **Local Docker Image in k3d**: `k3d` runs its own containerd runtime, so locally built Docker images must be imported using `k3d image import`.
@@ -47,7 +48,9 @@ flowchart TD
 ## 2. Containerization Artifacts
 
 ### 2.1 `docker/Dockerfile` (Using `uv` directly)
+
 Leverages the official `ghcr.io/astral-sh/uv` binary for ultra-fast, reproducible builds directly from `uv.lock`:
+
 - Base: `python:3.12-slim-bookworm`
 - Fast dependency installer: `COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/`
 - OS Dependencies: `graphviz`, `curl`, `build-essential`
@@ -59,6 +62,7 @@ Leverages the official `ghcr.io/astral-sh/uv` binary for ultra-fast, reproducibl
 - Entrypoint: `streamlit run app.py`
 
 ### 2.2 `.dockerignore`
+
 Excludes `.venv`, git caches, `.env` files, logs, and build caches to ensure clean, lightweight builds.
 
 ---
@@ -66,9 +70,12 @@ Excludes `.venv`, git caches, `.env` files, logs, and build caches to ensure cle
 ## 3. Step-by-Step Setup & Deployment
 
 ### Step 1: Create the `k3d` Cluster (`ai-demo`)
+
 Run in PowerShell:
+
 ```powershell
 k3d cluster create ai-demo `
+  --image rancher/k3s:v1.32.5-k3s1 `
   --api-port 6551 `
   -p "8089:80@loadbalancer" `
   -p "9443:443@loadbalancer" `
@@ -78,6 +85,7 @@ k3d cluster create ai-demo `
 ---
 
 ### Step 2: Build the Container Image & Import into k3d
+
 1. Build the Docker image locally:
    ```bash
    docker build -f docker/Dockerfile -t langgraph-ollama:latest .
@@ -90,6 +98,7 @@ k3d cluster create ai-demo `
 ---
 
 ### Step 3: Import Cluster into Rancher (`https://rancher.localhost:8443/`)
+
 1. Open Rancher in your browser: `https://rancher.localhost:8443/`.
 2. Go to **Global Apps / Clusters** -> **Add Cluster** -> select **Generic (Import Existing Cluster)**.
 3. Enter cluster name: `ai-demo-cluster`.
@@ -97,6 +106,7 @@ k3d cluster create ai-demo `
    ```bash
    kubectl apply -f https://rancher.localhost:8443/v3/import/<token>.yaml
    ```
+
    *(If using self-signed certificates, use the curl/insecure variant provided by Rancher)*.
 5. Wait for Rancher to connect and transition `ai-demo-cluster` to **Active**.
 
@@ -124,6 +134,7 @@ kubectl get pods,svc,ingress -n ai-apps
 #### Option B: Deploy via Static Manifests (`k8s/`)
 
 If you prefer applying static YAML files:
+
 ```powershell
 kubectl apply -k k8s/
 ```
@@ -133,18 +144,23 @@ kubectl apply -k k8s/
 ## 4. Accessing and Verifying the Application
 
 ### 1. Access via Ingress (k3d Load Balancer)
+
 Open in your browser:
+
 ```text
 http://streamlit.localhost:8089/
 ```
 
 ### 2. Access via Port-Forward (Direct Debugging)
+
 ```powershell
 kubectl port-forward svc/langgraph-app-langgraph-ollama 8501:8501 -n ai-apps
 ```
+
 Then navigate to `http://localhost:8501/`.
 
 ### 3. End-to-End Functional Test
+
 - **RAG Chatbot Agent**: Test queries like `"Search my notes: what is the logical execution order of a SQL SELECT query?"` to verify connectivity to Ollama on host port 11434.
 - **Internet Researcher**: Test queries to verify Tavily search and agent loop execution.
 - **Rancher Dashboard**: Monitor live CPU/Memory utilization, view real-time streaming logs, and scale replicas directly from the Rancher UI.
