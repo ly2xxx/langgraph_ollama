@@ -1,0 +1,85 @@
+# Default values for langgraph-ollama Helm chart.
+
+replicaCount: 1
+
+image:
+  repository: langgraph-ollama
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Ollama Connection Settings
+ollama:
+  # On Docker Desktop / Rancher desktop on Windows, host.docker.internal reaches the host Ollama port (11434)
+  baseUrl: "http://host.docker.internal:11434"
+  model: "glm-5.2:cloud"
+
+# Tavily Web Search API Settings
+tavily:
+  apiKey: "your_tavily_api_key_here"
+  # If you already created a secret manually or in Rancher Secrets UI, specify its name here:
+  existingSecret: ""
+  existingSecretKey: "TAVILY_API_KEY"
+
+# Optional md-mcp server integration
+mdMcp:
+  # e.g. "http://my-md-mcp.default.svc.cluster.local:8000/mcp"
+  url: ""
+
+service:
+  type: ClusterIP
+  port: 8501
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    # WebSocket & long-lived connection support for Streamlit
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "langgraph-streamlit-svc"
+    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
+  hosts:
+    - host: streamlit.localhost
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# Health Check Probes
+probes:
+  readiness:
+    path: /_stcore/health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  liveness:
+    path: /_stcore/health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -47,12 +47,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy built application and virtualenv from builder stage
-COPY --from=builder /app /app
+# Create non-root user first
+RUN useradd --create-home --uid 10001 appuser
 
-# Create and switch to non-root user
-RUN useradd --create-home --uid 10001 appuser && \
-    chown -R appuser:appuser /app
+# Copy directly with ownership set (avoids slow chown -R step and layer duplication)
+COPY --from=builder --chown=appuser:appuser /app /app
 
 USER appuser
 
