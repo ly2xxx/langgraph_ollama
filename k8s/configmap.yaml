@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: langgraph-streamlit-config
+  namespace: ai-apps
+data:
+  OLLAMA_MODEL: "glm-5.2:cloud"
+  # In Docker Desktop / K8s on Windows, host.docker.internal routes to host services (like Ollama on port 11434)
+  OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+  # Optional md-mcp service URL within the cluster or host
+  # MD_MCP_URL: "http://my-md-mcp.default.svc.cluster.local:8000/mcp"

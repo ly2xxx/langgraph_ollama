@@ -1,0 +1,30 @@
+# Virtual environments & python caches
+.venv/
+.venv*/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.cache/
+
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+
+# Git metadata
+.git/
+.gitignore
+
+# IDE & editors
+.vscode/
+.idea/
+.claude/
+
+# Temporary and log files
+*.log
+scratch/
+.loop/
+.langgraph_api/

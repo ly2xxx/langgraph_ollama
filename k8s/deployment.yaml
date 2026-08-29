@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langgraph-streamlit
+  namespace: ai-apps
+  labels:
+    app.kubernetes.io/name: langgraph-streamlit
+    app.kubernetes.io/part-of: multi-agent-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: langgraph-streamlit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: langgraph-streamlit
+    spec:
+      containers:
+        - name: streamlit
+          image: langgraph-ollama:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8501
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: langgraph-streamlit-config
+            - secretRef:
+                name: langgraph-streamlit-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
