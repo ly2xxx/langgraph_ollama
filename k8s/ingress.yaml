@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: langgraph-streamlit-ingress
+  namespace: ai-apps
+  annotations:
+    # Traefik / Nginx annotations for WebSocket support (crucial for Streamlit)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "langgraph-streamlit-svc"
+    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
+spec:
+  rules:
+    - host: streamlit.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: langgraph-streamlit-svc
+                port:
+                  number: 8501

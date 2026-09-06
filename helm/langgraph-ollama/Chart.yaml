@@ -1,0 +1,12 @@
+apiVersion: v2
+name: langgraph-ollama
+description: A Helm chart for deploying the LangGraph Multi-Agent Streamlit Application
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - langgraph
+  - streamlit
+  - ollama
+  - multi-agent
+  - rancher

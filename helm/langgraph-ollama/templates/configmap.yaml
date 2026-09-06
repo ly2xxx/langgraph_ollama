@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "langgraph-ollama.fullname" . }}-config
+  labels:
+    {{- include "langgraph-ollama.labels" . | nindent 4 }}
+data:
+  OLLAMA_MODEL: {{ .Values.ollama.model | quote }}
+  OLLAMA_BASE_URL: {{ .Values.ollama.baseUrl | quote }}
+  {{- if .Values.mdMcp.url }}
+  MD_MCP_URL: {{ .Values.mdMcp.url | quote }}
+  {{- end }}
