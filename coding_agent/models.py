@@ -36,23 +36,65 @@ def _env(role: str, suffix: str) -> str | None:
     return os.getenv(f"CODING_AGENT_{role.upper()}_{suffix}")
 
 
+def _default_provider() -> str:
+    if os.getenv("LLM_PROVIDER"):
+        return os.getenv("LLM_PROVIDER")
+    if os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") or os.getenv("OPENAI_API_KEY"):
+        return "openai"
+    return "ollama"
+
+
 def _resolve_role_config(role: Role) -> dict[str, str | None]:
+    default_prov = _default_provider()
     if role == "secondary":
-        provider = _env("secondary", "PROVIDER") or _env("primary", "PROVIDER") or "ollama"
-        model = _env("secondary", "MODEL") or _env("primary", "MODEL") or os.getenv("OLLAMA_MODEL")
-        base_url = _env("secondary", "BASE_URL") or _env("primary", "BASE_URL") or os.getenv("OLLAMA_BASE_URL")
+        provider = _env("secondary", "PROVIDER") or _env("primary", "PROVIDER") or default_prov
+        model = (
+            _env("secondary", "MODEL")
+            or _env("primary", "MODEL")
+            or (os.getenv("OPENAI_MODEL") if provider in ("openai", "litellm") else None)
+            or os.getenv("OLLAMA_MODEL")
+        )
+        base_url = (
+            _env("secondary", "BASE_URL")
+            or _env("primary", "BASE_URL")
+            or (os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") if provider in ("openai", "litellm") else None)
+            or os.getenv("OLLAMA_BASE_URL")
+        )
+        api_key = (
+            _env("secondary", "API_KEY")
+            or _env("primary", "API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or os.getenv("LITELLM_API_KEY")
+            or "sk-admin"
+        )
     else:
-        provider = _env("primary", "PROVIDER") or "ollama"
-        model = _env("primary", "MODEL") or os.getenv("OLLAMA_MODEL")
-        base_url = _env("primary", "BASE_URL") or os.getenv("OLLAMA_BASE_URL")
-    return {"provider": provider, "model": model, "base_url": base_url}
+        provider = _env("primary", "PROVIDER") or default_prov
+        model = (
+            _env("primary", "MODEL")
+            or (os.getenv("OPENAI_MODEL") if provider in ("openai", "litellm") else None)
+            or os.getenv("OLLAMA_MODEL")
+        )
+        base_url = (
+            _env("primary", "BASE_URL")
+            or (os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") if provider in ("openai", "litellm") else None)
+            or os.getenv("OLLAMA_BASE_URL")
+        )
+        api_key = (
+            _env("primary", "API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or os.getenv("LITELLM_API_KEY")
+            or "sk-admin"
+        )
+    return {"provider": provider, "model": model, "base_url": base_url, "api_key": api_key}
 
 
 def describe(role: Role) -> dict[str, str | None]:
     """Non-secret debug view of what a role currently resolves to — used by
     the UI / run report so a run is auditable without re-deriving env-var
     precedence by hand."""
-    return _resolve_role_config(role)
+    cfg = _resolve_role_config(role).copy()
+    cfg.pop("api_key", None)
+    return cfg
 
 
 def describe_all() -> dict[str, dict[str, str | None]]:
@@ -67,12 +109,20 @@ def describe_all() -> dict[str, dict[str, str | None]]:
 def get_llm(role: Role, *, temperature: float = 0.0):
     """Return a chat model for the given role.
 
-    Today only the 'ollama' provider is implemented; the branch below is
-    the seam a future provider (openai, anthropic, ...) plugs into without
-    touching any node's call site.
+    Supports 'ollama' and 'openai' / 'litellm' providers.
     """
     config = _resolve_role_config(role)
     provider = config["provider"]
+
+    if provider in ("openai", "litellm"):
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=config["model"],
+            base_url=config["base_url"],
+            api_key=config.get("api_key") or "sk-admin",
+            temperature=temperature,
+        )
 
     if provider == "ollama":
         from langchain_ollama import ChatOllama

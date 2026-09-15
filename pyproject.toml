@@ -41,6 +41,7 @@ dependencies = [
     "pytest-bdd>=7",
     "pytest-json-report>=1.5",
     "ruff>=0.6",
+    "langchain-openai>=1.6.2",
 ]
 
 [tool.ruff]
