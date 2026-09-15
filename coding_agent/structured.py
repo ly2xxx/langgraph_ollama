@@ -26,6 +26,9 @@ better layer in front:
 
 from __future__ import annotations
 
+import json
+import os
+import re
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -39,10 +42,35 @@ _RETRY_SUFFIX = (
     "No markdown formatting, no code fences, no commentary. Just the raw JSON object."
 )
 
-import json
-import re
-
+# Methods to try, in order. json_schema constrains Ollama's decoder to the
+# schema (most reliable); function_calling is langchain's default and works
+# across providers.
 _METHODS = ("json_schema", "function_calling")
+
+# Going through an OpenAI-compatible gateway (LiteLLM) to an Ollama backend, the
+# json_schema guarantee is gone: langchain-ollama's native `format` parameter is
+# no longer in play, so response_format is only advisory and the model can emit
+# prose the parser rejects. The gateway still logs 200 OK, which makes this
+# failure mode invisible in gateway logs. So put the portable method first for
+# OpenAI-family clients and keep json_mode as a third rung.
+_METHODS_OPENAI = ("function_calling", "json_mode", "json_schema")
+
+
+def _methods_for(llm) -> tuple[str, ...]:
+    """Method ladder for this client, overridable by env.
+
+    CODING_AGENT_STRUCTURED_METHODS=function_calling,json_mode pins the order
+    once `python -m evals.diagnose_llm` has shown which methods actually work
+    against your gateway and model.
+    """
+    override = os.getenv("CODING_AGENT_STRUCTURED_METHODS")
+    if override:
+        methods = tuple(m.strip() for m in override.split(",") if m.strip())
+        if methods:
+            return methods
+    if type(llm).__name__ in ("ChatOpenAI", "AzureChatOpenAI"):
+        return _METHODS_OPENAI
+    return _METHODS
 
 
 def _extract_json_str(text: str) -> str:
@@ -66,16 +94,13 @@ class StructuredOutputError(Exception):
 def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_method: int = 1) -> SchemaT:  # noqa: UP047 -- PEP 695 syntax would break older interpreters some CI/dev envs still run
     """Invoke `llm` for a `schema`-shaped structured response, robustly.
 
-    Tries schema binding methods; if unsupported or returning None (e.g. model
-    wrote text instead of calling a tool), falls back to direct model invocation
-    with JSON extraction. Raises StructuredOutputError only when every option fails.
+    Tries each method in `methods`; within a method, retries up to
+    `retries_per_method` extra times, feeding the parse error back into the
+    prompt. If all methods fail, attempts direct JSON extraction from raw content.
+    Raises StructuredOutputError only when every option fails.
     """
     last_error: Exception | None = None
-
-    # For ChatOpenAI / LiteLLM, function_calling is standard; json_schema can cause
-    # unsupported models to hang in unconstrained token generation loops.
-    is_openai = type(llm).__name__ == "ChatOpenAI"
-    methods = ("function_calling",) if is_openai else _METHODS
+    methods = _methods_for(llm)
 
     for method in methods:
         try:
@@ -92,12 +117,13 @@ def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_metho
                 last_error = exc
                 attempt_prompt = prompt + _RETRY_SUFFIX.format(error=str(exc)[:500])
                 continue
-            if result is not None:
-                return result
-
-            # Model returned text instead of a tool call -> break to direct fallback
-            last_error = ValueError(f"structured output returned None for method={method!r}")
-            break
+            if result is None:
+                # Some providers return None instead of raising when the
+                # model's output couldn't be bound to the schema.
+                last_error = ValueError(f"structured output returned None for method={method!r}")
+                attempt_prompt = prompt + _RETRY_SUFFIX.format(error="model returned no parseable object")
+                continue
+            return result
 
     # Fallback for models/gateways (like LiteLLM / DeepSeek / Ollama) that
     # return plain JSON in content rather than OpenAI tool_calls / json_schema
@@ -119,5 +145,9 @@ def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_metho
 
     raise StructuredOutputError(
         f"structured output failed for schema {schema.__name__} after trying "
-        f"methods {methods} and JSON fallback: {last_error}"
+        f"methods {methods} and JSON fallback with {retries_per_method} retry each on "
+        f"{type(llm).__name__}: {last_error}. "
+        f"Run `python -m evals.diagnose_llm` to see which methods your gateway "
+        f"and model actually support, then pin them with "
+        f"CODING_AGENT_STRUCTURED_METHODS."
     ) from last_error
