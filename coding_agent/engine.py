@@ -19,12 +19,30 @@ including the monkeypatch surfaces tests rely on (``_llm_parse_target_spec``,
 ``_llm_author_bdd``, ``_run_maker``, ``_llm_propose_plans``, ``_llm_judge_plans``,
 ``_llm_review``, ``_llm_diagnose``, ``get_llm``, etc.).
 
-Phase 1 scope (CODING_ENGINEER.md §6): the linear loop —
-intake -> author_bdd -> plan_tot (single fixed plan) -> code -> self_check
--> bdd_gate -> finalize, with a diagnose stub that retries on failure up to
-a budget, then escalates. No plan-switching (ToT/GoT, Phase 3), no
-signature-based no-progress detection (Phase 2), no adversarial reviewer
-(Phase 3) yet — see PHASED_PLAN.md for exactly what each phase added.
+All four phases of CODING_ENGINEER.md §6 are implemented — see PHASED_PLAN.md
+for what each one added. The loop is:
+
+    intake -> author_bdd -> plan_tot -> code -> self_check -> bdd_gate
+           -> review -> finalize
+
+with `diagnose` as the failure path off `self_check`, `bdd_gate` and `review`,
+routing back to `code` (retry the current plan), to `plan_tot` (retire it and
+re-score the survivors) or to `escalate` when the budgets are spent.
+
+Beyond the linear Phase 1 loop that means:
+
+- `plan_tot` is Tree-of-Thought, not a single fixed plan: the primary model
+  proposes k candidates at temperature 0.8, a secondary-role judge scores them
+  at temperature 0, and the highest-scoring non-exhausted plan becomes active.
+- Re-entry to `plan_tot` after a plan is retired **re-scores the surviving
+  candidates against accumulated lessons** rather than regenerating them —
+  the Graph-of-Thought part.
+- `diagnose` is LLM-classified and uses signature-based no-progress detection
+  (`signatures.py`), so a loop that keeps reproducing the same failure exits
+  rather than burning its budget.
+- `review` is an adversarial secondary-role checker between a green `bdd_gate`
+  and `finalize`, hunting trivial-pass hacks in step definitions the maker
+  wrote under the frozen .feature file.
 
 Every LLM call goes through a small boundary function (`_llm_parse_target_spec`,
 `_llm_author_bdd`, `_run_maker`) so tests can monkeypatch just the model call
