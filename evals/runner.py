@@ -130,6 +130,24 @@ def cleanup_worktree(target: Path, worktree: Path | None) -> None:
         shutil.rmtree(worktree, ignore_errors=True)
 
 
+def agent_changed_files(worktree: Path | None, task: dict) -> list[str]:
+    """Files the agent touched, relative to the seed commit.
+
+    Computed BEFORE the hidden tests are written, so it reflects the agent's
+    work only. An empty list on a FAIL means the agent never produced a change --
+    a completely different problem from producing a wrong one.
+    """
+    if worktree is None:
+        return []
+    proc = subprocess.run(["git", "diff", "--name-only", "HEAD~1..HEAD"],
+                          cwd=worktree, capture_output=True, text=True)
+    if proc.returncode != 0:  # single-commit history: diff against the empty tree
+        proc = subprocess.run(["git", "show", "--name-only", "--format=", "HEAD"],
+                              cwd=worktree, capture_output=True, text=True)
+    seeded = set(task["seed"]) | {"pytest.ini"}
+    return [f for f in proc.stdout.split() if f not in seeded or f in task["seed"]]
+
+
 def verify(task: dict, target: Path) -> tuple[bool, str]:
     """Write the hidden tests and run them against whatever the agent left behind.
 
@@ -164,10 +182,11 @@ def score_one(task: dict, keep: bool = False) -> TaskResult:
             return TaskResult(task["id"], task["category"], task["difficulty"],
                               False, attempts, escalated, time.time() - started, error=err)
         # Verify in the worktree -- that is where the agent's code actually is.
+        changed = agent_changed_files(worktree, task)
         solved, tail = verify(task, worktree)
         return TaskResult(task["id"], task["category"], task["difficulty"],
                           solved, attempts, escalated, time.time() - started,
-                          test_output_tail=tail)
+                          test_output_tail=tail, changed_files=changed)
     finally:
         if keep:
             print(f"    workspace kept: {target}")
@@ -261,7 +280,18 @@ def main() -> int:
         report.results.append(res)
         print(f"    -> {'PASS' if res.solved else 'FAIL'} "
               f"attempts={res.attempts} {res.wall_clock_s:.1f}s"
+              + (" ESCALATED" if res.escalated else "")
               + (f" ERROR {res.error}" if res.error else ""))
+        if not res.solved and res.test_output_tail:
+            # The single most useful line in a failed run: an ImportError here
+            # means the harness could not reach the agent's code, an assertion
+            # failure means the agent's code was simply wrong. Very different bugs.
+            print("    --- verification output ---")
+            for line in res.test_output_tail.splitlines():
+                print(f"    | {line}")
+        if not res.solved and res.changed_files:
+            print(f"    --- agent changed {len(res.changed_files)} file(s): "
+                  f"{', '.join(res.changed_files[:8])}")
 
     print(report.render())
     if args.out:

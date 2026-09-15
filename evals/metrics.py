@@ -23,6 +23,7 @@ class TaskResult:
     wall_clock_s: float
     error: str | None = None     # harness-level failure, not an agent failure
     test_output_tail: str = ""
+    changed_files: list[str] = field(default_factory=list)
 
     @property
     def valid(self) -> bool:
