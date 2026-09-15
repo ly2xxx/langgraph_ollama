@@ -189,3 +189,6 @@ images/
 
 #temp data
 data_storage/
+
+#log
+logs.*
