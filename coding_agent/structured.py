@@ -26,6 +26,7 @@ better layer in front:
 
 from __future__ import annotations
 
+import os
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -44,6 +45,31 @@ _RETRY_SUFFIX = (
 # across providers.
 _METHODS = ("json_schema", "function_calling")
 
+# Going through an OpenAI-compatible gateway (LiteLLM) to an Ollama backend, the
+# json_schema guarantee is gone: langchain-ollama's native `format` parameter is
+# no longer in play, so response_format is only advisory and the model can emit
+# prose the parser rejects. The gateway still logs 200 OK, which makes this
+# failure mode invisible in gateway logs. So put the portable method first for
+# OpenAI-family clients and keep json_mode as a third rung.
+_METHODS_OPENAI = ("function_calling", "json_mode", "json_schema")
+
+
+def _methods_for(llm) -> tuple[str, ...]:
+    """Method ladder for this client, overridable by env.
+
+    CODING_AGENT_STRUCTURED_METHODS=function_calling,json_mode pins the order
+    once `python -m evals.diagnose_llm` has shown which methods actually work
+    against your gateway and model.
+    """
+    override = os.getenv("CODING_AGENT_STRUCTURED_METHODS")
+    if override:
+        methods = tuple(m.strip() for m in override.split(",") if m.strip())
+        if methods:
+            return methods
+    if type(llm).__name__ in ("ChatOpenAI", "AzureChatOpenAI"):
+        return _METHODS_OPENAI
+    return _METHODS
+
 
 class StructuredOutputError(Exception):
     """All methods and retries failed to produce parseable structured output.
@@ -60,8 +86,9 @@ def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_metho
     prompt. Raises StructuredOutputError only when every combination fails.
     """
     last_error: Exception | None = None
+    methods = _methods_for(llm)
 
-    for method in _METHODS:
+    for method in methods:
         try:
             structured = llm.with_structured_output(schema, method=method)
         except Exception as exc:  # noqa: BLE001 -- any failure here means "method unsupported"; falling through is the point
@@ -86,5 +113,9 @@ def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_metho
 
     raise StructuredOutputError(
         f"structured output failed for schema {schema.__name__} after trying "
-        f"methods {_METHODS} with {retries_per_method} retry each: {last_error}"
+        f"methods {methods} with {retries_per_method} retry each on "
+        f"{type(llm).__name__}: {last_error}. "
+        f"Run `python -m evals.diagnose_llm` to see which methods your gateway "
+        f"and model actually support, then pin them with "
+        f"CODING_AGENT_STRUCTURED_METHODS."
     ) from last_error
