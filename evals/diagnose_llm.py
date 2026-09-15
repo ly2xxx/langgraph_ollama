@@ -26,6 +26,16 @@ class Tiny(BaseModel):
     count: int = Field(description="the number 42")
 
 
+def _methods_for_names(role: str) -> tuple[str, ...]:
+    """What the ladder would try for this role — used to name the dead methods."""
+    from coding_agent.models import get_llm
+    from coding_agent.structured import _methods_for
+    try:
+        return _methods_for(get_llm(role))
+    except Exception:
+        return ()
+
+
 def _ok(label: str, detail: str = "") -> None:
     print(f"  [PASS] {label}" + (f"  {detail}" if detail else ""))
 
@@ -37,6 +47,7 @@ def _fail(label: str, exc: BaseException) -> None:
 
 def main() -> int:
     failures: list[str] = []
+    working: dict[str, list[str]] = {}
 
     # ---- Layer 0: resolved configuration -------------------------------------
     print("\n0. Resolved model config (secrets omitted)")
@@ -106,6 +117,7 @@ def main() -> int:
             failures.append(f"{role}:no-structured-method")
         else:
             print(f"  working method(s) for {role}: {method_ok}")
+            working[role] = method_ok
 
         # ---- Layer 3: the real wrapper the agent uses ------------------------
         try:
@@ -116,6 +128,22 @@ def main() -> int:
             _fail("3. invoke_structured()", exc)
             failures.append(f"{role}:invoke_structured")
 
+    # A method that never works is pure waste on every fallback: the ladder pays a
+    # full round-trip to rediscover it. Pin what works.
+    if working:
+        common = set.intersection(*(set(v) for v in working.values()))
+        broken: set[str] = set()
+        for role in working:
+            broken |= set(_methods_for_names(role)) - set(working[role])
+        if common and broken:
+            print("\n" + "-" * 62)
+            print("  RECOMMENDED: pin the working method(s) in your .env so the ladder")
+            print("  never spends a round-trip on one that cannot work here.")
+            order = [m for m in ("function_calling", "json_mode", "json_schema") if m in common]
+            print(f"\n      CODING_AGENT_STRUCTURED_METHODS={','.join(order)}\n")
+            print(f"  (unsupported by your gateway/model: {', '.join(sorted(broken))})")
+            print("-" * 62)
+
     print("\n" + "=" * 62)
     if failures:
         print(f"  FAILED layers: {', '.join(failures)}")
@@ -123,8 +151,11 @@ def main() -> int:
         print("  cannot pass until it does.")
         print("=" * 62)
         return 1
-    print("  All layers pass. The LLM stack is not your problem —")
-    print("  re-run `python -m evals.runner --tasks bug-001 --keep` and send the traceback.")
+    print("  All layers pass. The LLM stack is not your problem.")
+    print("  A failing eval is therefore a real agent result, not a broken harness.")
+    print("  Re-run `python -m evals.runner --tasks bug-001 --keep`: a FAIL now prints")
+    print("  the verification output and the files the agent changed, which says")
+    print("  whether it wrote wrong code or never wrote any.")
     print("=" * 62)
     return 0
 
