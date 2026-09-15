@@ -95,12 +95,21 @@ def run_agent(task: dict, target: Path) -> tuple[int, bool, str, Path | None, st
 
     run_id = new_run_id()
     final: dict = {}
+    # Mirror run_cli's per-node trace. Without it this harness is a black box and
+    # a failure is indistinguishable from a hang -- which cost a day of guessing
+    # at behaviour the agent was reporting all along.
+    print(f"    run_id={run_id}")
     try:
         for update in stream_run(run_id, str(target), task["goal"], hitl=False,
                                  budgets=dict(DEFAULT_BUDGETS)):
             for node_name, node_update in update.items():
-                if node_name == "__interrupt__" or not isinstance(node_update, dict):
+                if node_name == "__interrupt__":
+                    print(f"    [INTERRUPTED] {node_update}")
                     continue
+                if not isinstance(node_update, dict):
+                    continue
+                st = node_update.get("status")
+                print(f"    [{node_name}]" + (f" status={st}" if st else ""), flush=True)
                 final.update(node_update)
     except Exception as exc:  # harness/infra failure, not an agent failure
         return 0, False, str(final.get("escalation_reason") or ""), _worktree_of(final), f"{type(exc).__name__}: {exc}"
@@ -113,10 +122,18 @@ def run_agent(task: dict, target: Path) -> tuple[int, bool, str, Path | None, st
     # have nothing to do with coding ability, so a bare escalated=True flag
     # cannot distinguish a weak model from a loop that never reached the code.
     reason = str(final.get("escalation_reason") or "")
+    print(f"    report: {report_path_for(run_id)}")
     wt = _worktree_of(final)
     if wt is None:
         return attempts, escalated, reason, None, "agent produced no worktree_dir (intake failed?)"
     return attempts, escalated, reason, wt, None
+
+
+def report_path_for(run_id: str) -> Path:
+    """Same location run_cli prints. The loop writes a report on BOTH outcomes --
+    done and escalated -- so there is always one to read after a failed task."""
+    from coding_agent.nodes import _loop_state_dir
+    return _loop_state_dir() / "state" / "coding-engineer" / run_id / "run-report.md"
 
 
 def _worktree_of(state: dict) -> Path | None:
