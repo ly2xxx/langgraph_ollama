@@ -11,6 +11,7 @@ No LLM and no cluster needed. If either of these is red, stop and fix the datase
 python -m evals.runner --validate   # hidden tests must FAIL on every unfixed seed
 python -m evals.runner --selftest   # hidden tests must PASS on every reference solution
 ```
+
 Expected: `8/8 tasks valid`, then `8/8 tasks solvable`.
 
 ## Phase 1 — build and import the image
@@ -19,6 +20,7 @@ Expected: `8/8 tasks valid`, then `8/8 tasks solvable`.
 docker build -f docker/Dockerfile -t langgraph-ollama:demo .
 k3d image import langgraph-ollama:demo -c ai-demo
 ```
+
 Check: `docker images langgraph-ollama:demo` shows the tag; import prints `Successfully imported`.
 
 ## Phase 2 — deploy
@@ -27,6 +29,7 @@ Check: `docker images langgraph-ollama:demo` shows the tag; import prints `Succe
 kubectl apply -k k8s/
 kubectl -n ai-apps rollout status deployment/langgraph-streamlit --timeout=180s
 ```
+
 The `startupProbe` allows 150s of cold start, so a slow first model load is not a
 CrashLoop. If rollout stalls: `kubectl -n ai-apps describe pod -l app.kubernetes.io/name=langgraph-streamlit`.
 
@@ -65,6 +68,7 @@ kubectl -n ai-apps get networkpolicy
 ```powershell
 kubectl -n ai-apps port-forward svc/langgraph-streamlit 8501:8501
 ```
+
 Then http://localhost:8501 — or http://streamlit.localhost:8089 via the k3d ingress.
 Rancher → Workloads → `ai-apps` shows logs, scaling and metrics for the walkthrough.
 
