@@ -9,7 +9,8 @@ No LLM and no cluster needed. If either of these is red, stop and fix the datase
 
 ```powershell
 python -m evals.runner --validate   # hidden tests must FAIL on every unfixed seed
-python -m evals.runner --selftest   # hidden tests must PASS on every reference solution
+python -m evals.runner --selftest 
+uv run python -m evals.runner# hidden tests must PASS on every reference solution
 ```
 
 Expected: `8/8 tasks valid`, then `8/8 tasks solvable`.
