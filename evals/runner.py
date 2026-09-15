@@ -77,8 +77,15 @@ def materialise(task: dict, root: Path) -> None:
     )
 
 
-def run_agent(task: dict, target: Path) -> tuple[int, bool, str | None]:
-    """Drive the real agent. Returns (total_attempts, escalated, harness_error)."""
+def run_agent(task: dict, target: Path) -> tuple[int, bool, Path | None, str | None]:
+    """Drive the real agent. Returns (total_attempts, escalated, worktree_dir, harness_error).
+
+    The agent does NOT write into `target`. coding_agent.tools.worktree.create_worktree
+    puts every run in <loop_state_dir>/worktrees/<run_id> on branch
+    coding-engineer/<run_id>, and that branch is never merged back. So we capture
+    `worktree_dir` off the intake node's state update and verify THERE -- verifying
+    `target` would score the pristine seed, which fails by construction.
+    """
     from coding_agent.engine import stream_run, new_run_id
 
     run_id = new_run_id()
@@ -91,44 +98,83 @@ def run_agent(task: dict, target: Path) -> tuple[int, bool, str | None]:
                     continue
                 final.update(node_update)
     except Exception as exc:  # harness/infra failure, not an agent failure
-        return 0, False, f"{type(exc).__name__}: {exc}"
+        return 0, False, _worktree_of(final), f"{type(exc).__name__}: {exc}"
 
     attempts = int(final.get("total_attempts") or final.get("attempt") or 1)
     status = str(final.get("status") or "")
     escalated = "escalat" in status.lower() or "budget" in status.lower()
-    return attempts, escalated, None
+    wt = _worktree_of(final)
+    if wt is None:
+        return attempts, escalated, None, "agent produced no worktree_dir (intake failed?)"
+    return attempts, escalated, wt, None
+
+
+def _worktree_of(state: dict) -> Path | None:
+    wt = state.get("worktree_dir")
+    if not wt:
+        return None
+    p = Path(wt)
+    return p if p.exists() else None
+
+
+def cleanup_worktree(target: Path, worktree: Path | None) -> None:
+    """Remove the run's worktree. It lives OUTSIDE the temp dir, so rmtree of the
+    workspace does not reclaim it -- and create_worktree() raises WorktreeError if
+    the directory already exists, so leftovers break later runs.
+    """
+    if worktree is None or not worktree.exists():
+        return
+    subprocess.run(["git", "worktree", "remove", "--force", str(worktree)],
+                   cwd=target, capture_output=True, text=True)
+    if worktree.exists():           # fallback-copy path: not a real worktree
+        shutil.rmtree(worktree, ignore_errors=True)
 
 
 def verify(task: dict, target: Path) -> tuple[bool, str]:
-    """Write the hidden tests and run them against whatever the agent left behind."""
+    """Write the hidden tests and run them against whatever the agent left behind.
+
+    `target` is the agent's WORKTREE, not the seed dir -- see run_agent().
+    A hang or crash here is scored as a failed task, never allowed to abort the
+    whole run: one pathological task must not cost the other seven.
+    """
     _write_files(target, task["verify"]["files"])
-    proc = subprocess.run(
-        task["verify"]["cmd"], cwd=target, capture_output=True, text=True,
-        timeout=300, env={**os.environ, "PYTHONPATH": str(target)},
-    )
+    try:
+        proc = subprocess.run(
+            task["verify"]["cmd"], cwd=target, capture_output=True, text=True,
+            timeout=300, env={**os.environ, "PYTHONPATH": str(target)},
+        )
+    except subprocess.TimeoutExpired:
+        return False, "verification timed out after 300s"
+    except OSError as exc:
+        return False, f"could not run verification: {exc}"
     tail = (proc.stdout + proc.stderr).strip().splitlines()[-12:]
     return proc.returncode == 0, "\n".join(tail)
 
 
 def score_one(task: dict, keep: bool = False) -> TaskResult:
     started = time.time()
+    worktree: Path | None = None
     tmp = Path(tempfile.mkdtemp(prefix=f"eval-{task['id']}-"))
     target = tmp / "repo"
     target.mkdir()
     try:
         materialise(task, target)
-        attempts, escalated, err = run_agent(task, target)
+        attempts, escalated, worktree, err = run_agent(task, target)
         if err:
             return TaskResult(task["id"], task["category"], task["difficulty"],
                               False, attempts, escalated, time.time() - started, error=err)
-        solved, tail = verify(task, target)
+        # Verify in the worktree -- that is where the agent's code actually is.
+        solved, tail = verify(task, worktree)
         return TaskResult(task["id"], task["category"], task["difficulty"],
                           solved, attempts, escalated, time.time() - started,
                           test_output_tail=tail)
     finally:
         if keep:
             print(f"    workspace kept: {target}")
+            if worktree:
+                print(f"    worktree kept:  {worktree}")
         else:
+            cleanup_worktree(target, worktree)
             shutil.rmtree(tmp, ignore_errors=True)
 
 
