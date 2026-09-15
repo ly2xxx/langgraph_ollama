@@ -41,6 +41,19 @@
             ],
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "Debug evals.runner real test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/evals/runner.py",
+            "args": [
+                "--tasks",
+                "bug-001",
+                "--keep"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }

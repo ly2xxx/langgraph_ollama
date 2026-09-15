@@ -39,10 +39,21 @@ _RETRY_SUFFIX = (
     "No markdown formatting, no code fences, no commentary. Just the raw JSON object."
 )
 
-# Methods to try, in order. json_schema constrains Ollama's decoder to the
-# schema (most reliable); function_calling is langchain's default and works
-# across providers.
+import json
+import re
+
 _METHODS = ("json_schema", "function_calling")
+
+
+def _extract_json_str(text: str) -> str:
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+    if fence:
+        return fence.group(1).strip()
+    outer = re.search(r"(\{.*\})", cleaned, re.DOTALL)
+    if outer:
+        return outer.group(1).strip()
+    return cleaned
 
 
 class StructuredOutputError(Exception):
@@ -55,13 +66,18 @@ class StructuredOutputError(Exception):
 def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_method: int = 1) -> SchemaT:  # noqa: UP047 -- PEP 695 syntax would break older interpreters some CI/dev envs still run
     """Invoke `llm` for a `schema`-shaped structured response, robustly.
 
-    Tries each method in `_METHODS`; within a method, retries up to
-    `retries_per_method` extra times, feeding the parse error back into the
-    prompt. Raises StructuredOutputError only when every combination fails.
+    Tries schema binding methods; if unsupported or returning None (e.g. model
+    wrote text instead of calling a tool), falls back to direct model invocation
+    with JSON extraction. Raises StructuredOutputError only when every option fails.
     """
     last_error: Exception | None = None
 
-    for method in _METHODS:
+    # For ChatOpenAI / LiteLLM, function_calling is standard; json_schema can cause
+    # unsupported models to hang in unconstrained token generation loops.
+    is_openai = type(llm).__name__ == "ChatOpenAI"
+    methods = ("function_calling",) if is_openai else _METHODS
+
+    for method in methods:
         try:
             structured = llm.with_structured_output(schema, method=method)
         except Exception as exc:  # noqa: BLE001 -- any failure here means "method unsupported"; falling through is the point
@@ -76,15 +92,32 @@ def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_metho
                 last_error = exc
                 attempt_prompt = prompt + _RETRY_SUFFIX.format(error=str(exc)[:500])
                 continue
-            if result is None:
-                # Some providers return None instead of raising when the
-                # model's output couldn't be bound to the schema.
-                last_error = ValueError(f"structured output returned None for method={method!r}")
-                attempt_prompt = prompt + _RETRY_SUFFIX.format(error="model returned no parseable object")
-                continue
-            return result
+            if result is not None:
+                return result
+
+            # Model returned text instead of a tool call -> break to direct fallback
+            last_error = ValueError(f"structured output returned None for method={method!r}")
+            break
+
+    # Fallback for models/gateways (like LiteLLM / DeepSeek / Ollama) that
+    # return plain JSON in content rather than OpenAI tool_calls / json_schema
+    if hasattr(llm, "invoke") and callable(getattr(llm, "invoke")):
+        try:
+            schema_json = json.dumps(schema.model_json_schema(), indent=2)
+            fallback_prompt = (
+                f"{prompt}\n\n"
+                f"IMPORTANT: Respond with ONLY a single valid JSON object strictly adhering to this schema:\n"
+                f"{schema_json}\n\n"
+                f"Do not include commentary or markdown fences. Escape all internal quotes and newlines."
+            )
+            msg = llm.invoke(fallback_prompt)
+            raw_text = msg.content if hasattr(msg, "content") else str(msg)
+            json_str = _extract_json_str(raw_text)
+            return schema.model_validate_json(json_str)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
 
     raise StructuredOutputError(
         f"structured output failed for schema {schema.__name__} after trying "
-        f"methods {_METHODS} with {retries_per_method} retry each: {last_error}"
+        f"methods {methods} and JSON fallback: {last_error}"
     ) from last_error
