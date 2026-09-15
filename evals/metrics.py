@@ -24,6 +24,7 @@ class TaskResult:
     error: str | None = None     # harness-level failure, not an agent failure
     test_output_tail: str = ""
     changed_files: list[str] = field(default_factory=list)
+    escalation_reason: str = ""   # why the loop gave up, straight from state
 
     @property
     def valid(self) -> bool:

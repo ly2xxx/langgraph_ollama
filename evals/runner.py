@@ -37,7 +37,9 @@ from evals.metrics import EvalReport, TaskResult  # noqa: E402
 DATASET = Path(__file__).parent / "dataset.json"
 DEFAULT_BUDGETS = {
     "max_attempts_per_plan": 3,
-    "max_plans": 2,
+    # max_plans is the tree-of-thoughts candidate count (nodes.py `k`), NOT a
+    # replan budget. 2 narrowed the search below the code's own default of 3.
+    "max_plans": 3,
     "max_total_attempts": 5,
     "cmd_timeout_s": 120,
     "wall_clock_s": 900,
@@ -64,7 +66,7 @@ def _write_files(root: Path, files: dict[str, str]) -> None:
         p.write_text(content)
 
 
-def materialise(task: dict, root: Path) -> None:
+def materialise(task: dict, root: Path) -> str:
     """Seed repo + git init. The agent needs a real git repo to branch a worktree from."""
     _write_files(root, task["seed"])
     (root / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n")
@@ -75,9 +77,12 @@ def materialise(task: dict, root: Path) -> None:
          "commit", "-q", "-m", "seed"],
         cwd=root, check=True,
     )
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
+                         capture_output=True, text=True, check=True)
+    return sha.stdout.strip()
 
 
-def run_agent(task: dict, target: Path) -> tuple[int, bool, Path | None, str | None]:
+def run_agent(task: dict, target: Path) -> tuple[int, bool, str, Path | None, str | None]:
     """Drive the real agent. Returns (total_attempts, escalated, worktree_dir, harness_error).
 
     The agent does NOT write into `target`. coding_agent.tools.worktree.create_worktree
@@ -98,15 +103,20 @@ def run_agent(task: dict, target: Path) -> tuple[int, bool, Path | None, str | N
                     continue
                 final.update(node_update)
     except Exception as exc:  # harness/infra failure, not an agent failure
-        return 0, False, _worktree_of(final), f"{type(exc).__name__}: {exc}"
+        return 0, False, str(final.get("escalation_reason") or ""), _worktree_of(final), f"{type(exc).__name__}: {exc}"
 
     attempts = int(final.get("total_attempts") or final.get("attempt") or 1)
     status = str(final.get("status") or "")
     escalated = "escalat" in status.lower() or "budget" in status.lower()
+    # The loop records WHY it gave up -- "unsuitable goal", "no_plans_left",
+    # "intake structured-output failure: ...". Three of the six escalation paths
+    # have nothing to do with coding ability, so a bare escalated=True flag
+    # cannot distinguish a weak model from a loop that never reached the code.
+    reason = str(final.get("escalation_reason") or "")
     wt = _worktree_of(final)
     if wt is None:
-        return attempts, escalated, None, "agent produced no worktree_dir (intake failed?)"
-    return attempts, escalated, wt, None
+        return attempts, escalated, reason, None, "agent produced no worktree_dir (intake failed?)"
+    return attempts, escalated, reason, wt, None
 
 
 def _worktree_of(state: dict) -> Path | None:
@@ -130,22 +140,25 @@ def cleanup_worktree(target: Path, worktree: Path | None) -> None:
         shutil.rmtree(worktree, ignore_errors=True)
 
 
-def agent_changed_files(worktree: Path | None, task: dict) -> list[str]:
-    """Files the agent touched, relative to the seed commit.
+def agent_changed_files(worktree: Path | None, seed_sha: str) -> list[str]:
+    """Files the agent touched, diffed against the exact seed commit.
 
-    Computed BEFORE the hidden tests are written, so it reflects the agent's
-    work only. An empty list on a FAIL means the agent never produced a change --
-    a completely different problem from producing a wrong one.
+    Computed BEFORE the hidden tests are written, so it reflects the agent's work
+    only. Diffing the working tree against `seed_sha` catches both committed and
+    uncommitted changes in one shot -- `HEAD~1..HEAD` does not, because the
+    worktree branches off a single-commit history and that range lists the seed's
+    own files as though the agent had written them.
+
+    An empty list on a FAIL means the agent never produced a change: a completely
+    different problem from producing a wrong one.
     """
-    if worktree is None:
+    if worktree is None or not seed_sha:
         return []
-    proc = subprocess.run(["git", "diff", "--name-only", "HEAD~1..HEAD"],
+    proc = subprocess.run(["git", "diff", "--name-only", seed_sha],
                           cwd=worktree, capture_output=True, text=True)
-    if proc.returncode != 0:  # single-commit history: diff against the empty tree
-        proc = subprocess.run(["git", "show", "--name-only", "--format=", "HEAD"],
-                              cwd=worktree, capture_output=True, text=True)
-    seeded = set(task["seed"]) | {"pytest.ini"}
-    return [f for f in proc.stdout.split() if f not in seeded or f in task["seed"]]
+    if proc.returncode != 0:
+        return []
+    return sorted(f for f in proc.stdout.split() if f)
 
 
 def verify(task: dict, target: Path) -> tuple[bool, str]:
@@ -176,17 +189,19 @@ def score_one(task: dict, keep: bool = False) -> TaskResult:
     target = tmp / "repo"
     target.mkdir()
     try:
-        materialise(task, target)
-        attempts, escalated, worktree, err = run_agent(task, target)
+        seed_sha = materialise(task, target)
+        attempts, escalated, reason, worktree, err = run_agent(task, target)
         if err:
             return TaskResult(task["id"], task["category"], task["difficulty"],
-                              False, attempts, escalated, time.time() - started, error=err)
+                              False, attempts, escalated, time.time() - started,
+                              error=err, escalation_reason=reason)
         # Verify in the worktree -- that is where the agent's code actually is.
-        changed = agent_changed_files(worktree, task)
+        changed = agent_changed_files(worktree, seed_sha)
         solved, tail = verify(task, worktree)
         return TaskResult(task["id"], task["category"], task["difficulty"],
                           solved, attempts, escalated, time.time() - started,
-                          test_output_tail=tail, changed_files=changed)
+                          test_output_tail=tail, changed_files=changed,
+                          escalation_reason=reason)
     finally:
         if keep:
             print(f"    workspace kept: {target}")
@@ -281,6 +296,8 @@ def main() -> int:
         print(f"    -> {'PASS' if res.solved else 'FAIL'} "
               f"attempts={res.attempts} {res.wall_clock_s:.1f}s"
               + (" ESCALATED" if res.escalated else "")
+              + (f"\n       escalation_reason: {res.escalation_reason}"
+                 if res.escalation_reason else "")
               + (f" ERROR {res.error}" if res.error else ""))
         if not res.solved and res.test_output_tail:
             # The single most useful line in a failed run: an ImportError here
