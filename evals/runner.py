@@ -42,7 +42,7 @@ DEFAULT_BUDGETS = {
     "max_plans": 3,
     "max_total_attempts": 5,
     "cmd_timeout_s": 120,
-    "wall_clock_s": 900,
+    "wall_clock_s": 2400,
     "token_budget": 200_000,
 }
 
@@ -69,6 +69,12 @@ def _write_files(root: Path, files: dict[str, str]) -> None:
 def materialise(task: dict, root: Path) -> str:
     """Seed repo + git init. The agent needs a real git repo to branch a worktree from."""
     _write_files(root, task["seed"])
+    # Seed a visible smoke test. Without it `tests/` does not exist, so the agent's
+    # self_check gate collects zero tests and reports passed=true while src/ is
+    # still a stub -- the agent is told it is done and spends its whole budget on
+    # the only gate that does fail, its own BDD harness. The hidden acceptance
+    # tests stay hidden; this only asserts the required symbol exists.
+    _write_files(root, task.get("smoke", {}))
     (root / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n")
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
@@ -175,7 +181,8 @@ def agent_changed_files(worktree: Path | None, seed_sha: str) -> list[str]:
                           cwd=worktree, capture_output=True, text=True)
     if proc.returncode != 0:
         return []
-    return sorted(f for f in proc.stdout.split() if f)
+    return sorted(f for f in proc.stdout.split()
+                  if f and "__pycache__" not in f and not f.endswith(".pyc"))
 
 
 def verify(task: dict, target: Path) -> tuple[bool, str]:
