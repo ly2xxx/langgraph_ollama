@@ -25,6 +25,9 @@
       },
       "reference": {
         "src/textutil.py": "import re\n\n\ndef collapse_whitespace(s):\n    return re.sub(r'\\s+', ' ', s).strip()\n"
+      },
+      "smoke": {
+        "tests/test_smoke.py": "\"\"\"Visible contract check, seeded with the repo.\n\nDeliberately shallow: it asserts the required symbol exists and is callable,\nnothing about behaviour. Its job is to give the agent's own self_check gate a\nreal signal -- without it the seed has no tests at all, self_check collects\nzero, and the agent is told its implementation passes while the module is\nstill an unimplemented stub.\n\"\"\"\nfrom src.textutil import collapse_whitespace\n\n\ndef test_symbols_exist():\n    assert callable(collapse_whitespace), 'collapse_whitespace must be callable'\n"
       }
     },
     {
@@ -51,6 +54,9 @@
       },
       "reference": {
         "src/chunker.py": "def chunk(items, n):\n    if n < 1:\n        raise ValueError('n must be >= 1')\n    return [items[i:i + n] for i in range(0, len(items), n)]\n"
+      },
+      "smoke": {
+        "tests/test_smoke.py": "\"\"\"Visible contract check, seeded with the repo.\n\nDeliberately shallow: it asserts the required symbol exists and is callable,\nnothing about behaviour. Its job is to give the agent's own self_check gate a\nreal signal -- without it the seed has no tests at all, self_check collects\nzero, and the agent is told its implementation passes while the module is\nstill an unimplemented stub.\n\"\"\"\nfrom src.chunker import chunk\n\n\ndef test_symbols_exist():\n    assert callable(chunk), 'chunk must be callable'\n"
       }
     },
     {
@@ -77,6 +83,9 @@
       },
       "reference": {
         "src/retry.py": "import functools\n\n\ndef retry(times, exceptions):\n    def deco(fn):\n        @functools.wraps(fn)\n        def wrapper(*a, **kw):\n            last = None\n            for _ in range(times):\n                try:\n                    return fn(*a, **kw)\n                except exceptions as exc:\n                    last = exc\n            raise last\n        return wrapper\n    return deco\n"
+      },
+      "smoke": {
+        "tests/test_smoke.py": "\"\"\"Visible contract check, seeded with the repo.\n\nDeliberately shallow: it asserts the required symbol exists and is callable,\nnothing about behaviour. Its job is to give the agent's own self_check gate a\nreal signal -- without it the seed has no tests at all, self_check collects\nzero, and the agent is told its implementation passes while the module is\nstill an unimplemented stub.\n\"\"\"\nfrom src.retry import retry\n\n\ndef test_symbols_exist():\n    assert callable(retry), 'retry must be callable'\n"
       }
     },
     {
@@ -103,6 +112,9 @@
       },
       "reference": {
         "src/ratelimit.py": "import time\n\n\nclass TokenBucket:\n    def __init__(self, capacity, refill_rate):\n        self.capacity = float(capacity)\n        self.refill_rate = float(refill_rate)\n        self.tokens = float(capacity)\n        self.updated = None\n\n    def consume(self, n=1, now=None):\n        now = time.monotonic() if now is None else float(now)\n        if self.updated is None:\n            self.updated = now\n        elapsed = max(0.0, now - self.updated)\n        self.updated = now\n        self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)\n        if self.tokens >= n:\n            self.tokens -= n\n            return True\n        return False\n"
+      },
+      "smoke": {
+        "tests/test_smoke.py": "\"\"\"Visible contract check, seeded with the repo.\n\nDeliberately shallow: it asserts the required symbol exists and is callable,\nnothing about behaviour. Its job is to give the agent's own self_check gate a\nreal signal -- without it the seed has no tests at all, self_check collects\nzero, and the agent is told its implementation passes while the module is\nstill an unimplemented stub.\n\"\"\"\nfrom src.ratelimit import TokenBucket\n\n\ndef test_symbols_exist():\n    assert callable(TokenBucket), 'TokenBucket must be callable'\n"
       }
     },
     {
@@ -129,6 +141,9 @@
       },
       "reference": {
         "src/orders.py": "DISCOUNTS = {'SAVE10': 0.10, 'HALF': 0.50}\n\n\ndef subtotal(items):\n    return sum(it['price'] * it['qty'] for it in items)\n\n\ndef apply_discount(amount, code):\n    return amount * (1 - DISCOUNTS[code]) if code in DISCOUNTS else amount\n\n\ndef with_tax(amount, rate):\n    return round(amount * (1 + rate), 2)\n\n\ndef total(items, code, rate):\n    return with_tax(apply_discount(subtotal(items), code), rate)\n"
+      },
+      "smoke": {
+        "tests/test_smoke.py": "\"\"\"Visible contract check, seeded with the repo.\n\nDeliberately shallow: it asserts the required symbol exists and is callable,\nnothing about behaviour. Its job is to give the agent's own self_check gate a\nreal signal -- without it the seed has no tests at all, self_check collects\nzero, and the agent is told its implementation passes while the module is\nstill an unimplemented stub.\n\"\"\"\nfrom src.orders import total\n\n\ndef test_symbols_exist():\n    assert callable(total), 'total must be callable'\n"
       }
     },
     {
@@ -155,6 +170,9 @@
       },
       "reference": {
         "src/intervals.py": "def merge_intervals(iv):\n    if not iv:\n        return []\n    out = []\n    for s, e in sorted(iv, key=lambda p: (p[0], p[1])):\n        if out and s <= out[-1][1]:\n            out[-1][1] = max(out[-1][1], e)\n        else:\n            out.append([s, e])\n    return out\n"
+      },
+      "smoke": {
+        "tests/test_smoke.py": "\"\"\"Visible contract check, seeded with the repo.\n\nDeliberately shallow: it asserts the required symbol exists and is callable,\nnothing about behaviour. Its job is to give the agent's own self_check gate a\nreal signal -- without it the seed has no tests at all, self_check collects\nzero, and the agent is told its implementation passes while the module is\nstill an unimplemented stub.\n\"\"\"\nfrom src.intervals import merge_intervals\n\n\ndef test_symbols_exist():\n    assert callable(merge_intervals), 'merge_intervals must be callable'\n"
       }
     },
     {
@@ -181,6 +199,9 @@
       },
       "reference": {
         "src/config.py": "def parse_config(text):\n    out = {'__global__': {}}\n    section = '__global__'\n    for i, raw in enumerate(text.splitlines(), start=1):\n        line = raw.strip()\n        if not line or line.startswith('#'):\n            continue\n        if line.startswith('[') and line.endswith(']'):\n            section = line[1:-1].strip()\n            out.setdefault(section, {})\n            continue\n        if '=' not in line:\n            raise ValueError(f'malformed line {i}: {raw!r}')\n        k, _, v = line.partition('=')\n        out.setdefault(section, {})[k.strip()] = v.strip()\n    return out\n"
+      },
+      "smoke": {
+        "tests/test_smoke.py": "\"\"\"Visible contract check, seeded with the repo.\n\nDeliberately shallow: it asserts the required symbol exists and is callable,\nnothing about behaviour. Its job is to give the agent's own self_check gate a\nreal signal -- without it the seed has no tests at all, self_check collects\nzero, and the agent is told its implementation passes while the module is\nstill an unimplemented stub.\n\"\"\"\nfrom src.config import parse_config\n\n\ndef test_symbols_exist():\n    assert callable(parse_config), 'parse_config must be callable'\n"
       }
     },
     {
@@ -207,6 +228,9 @@
       },
       "reference": {
         "src/stats.py": "def _accumulate(xs):\n    total = 0.0\n    n = 0\n    for x in xs:\n        total += x\n        n += 1\n    return total, n\n\n\ndef mean(xs):\n    total, n = _accumulate(xs)\n    return total / n if n else 0.0\n\n\ndef variance(xs):\n    total, n = _accumulate(xs)\n    if not n:\n        return 0.0\n    m = total / n\n    sq, _ = _accumulate((x - m) ** 2 for x in xs)\n    return sq / n\n\n\ndef stddev(xs):\n    return variance(xs) ** 0.5\n"
+      },
+      "smoke": {
+        "tests/test_smoke.py": "\"\"\"Visible contract check, seeded with the repo.\n\nDeliberately shallow: it asserts the required symbol exists and is callable,\nnothing about behaviour. Its job is to give the agent's own self_check gate a\nreal signal -- without it the seed has no tests at all, self_check collects\nzero, and the agent is told its implementation passes while the module is\nstill an unimplemented stub.\n\"\"\"\nfrom src.stats import mean, variance, stddev\n\n\ndef test_symbols_exist():\n    assert callable(mean), 'mean must be callable'\n    assert callable(variance), 'variance must be callable'\n    assert callable(stddev), 'stddev must be callable'\n"
       }
     }
   ]
