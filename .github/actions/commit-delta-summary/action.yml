@@ -19,7 +19,7 @@ inputs:
   model:
     description: Ollama Cloud model.
     required: false
-    default: gpt-oss:120b-cloud
+    default: qwen3.5:cloud
   max-diff-chars:
     description: Truncate the diff beyond this many characters.
     required: false
