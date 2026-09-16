@@ -27,6 +27,14 @@ they become read-only for the rest of the run — the agent that writes the code
 own definition of done. Write scenarios that are genuinely checkable (concrete inputs and expected \
 outputs/behaviour), not vague restatements of the goal.
 
+For parameterized steps in pytest-bdd:
+- If steps use parameters, ALWAYS import `parsers` from `pytest_bdd` and wrap pattern strings in `parsers.parse('... {{param}} ...')` or `parsers.re(...)`, e.g.:
+    @given(parsers.parse('the input is "{{input}}"'))
+    def set_input(context, input):
+        context['input'] = input
+- Never use angle brackets `<param>` in step decorators without parsers (e.g. `@given('the input is "<input>"')`), as pytest-bdd treats unparsed strings as exact literal matches and will fail with StepDefinitionNotFoundError.
+- Alternatively, write exact literal @given/@when/@then steps matching each scenario directly.
+
 Goal: {goal}
 Acceptance criteria:
 {acceptance_criteria}
