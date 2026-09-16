@@ -71,7 +71,7 @@ jobs:
 
       - name: Summarise
         id: summary
-        uses: ly2xxx/langgraph_ollama/.github/actions/commit-delta-summary@feature/eval-harness-and-k8s-hardening
+        uses: ly2xxx/.github/actions/commit-delta-summary@main
         with:
           base: ${{ inputs.base_ref || github.event.inputs.base_ref || '' }}
           head: ${{ inputs.head_ref || github.event.inputs.head_ref || '' }}
