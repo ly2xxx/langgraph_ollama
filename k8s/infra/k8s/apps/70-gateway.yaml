@@ -1,0 +1,228 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-policy
+  namespace: agent-apps
+  labels:
+    app: agent-gateway
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+data:
+  gateway.py: |
+    import json
+    import urllib.request
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    AGENT2_URL = "http://agent-2.agent-apps.svc.cluster.local:8080"
+    MCP_URL = "http://mcp-server.agent-apps.svc.cluster.local:8000"
+    LITELLM_URL = "http://litellm.ai-platform.svc.cluster.local:4000"
+
+    class GatewayHandler(BaseHTTPRequestHandler):
+        def _send_json(self, data, code=200):
+            self.send_response(code)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode('utf-8'))
+
+        def do_GET(self):
+            if self.path in ['/healthz', '/health']:
+                self._send_json({"status": "ok", "service": "agent-gateway"})
+            elif self.path == '/status':
+                self._send_json({
+                    "service": "agent-gateway",
+                    "routes": {
+                        "agent-2": AGENT2_URL,
+                        "mcp": MCP_URL,
+                        "litellm": LITELLM_URL
+                    }
+                })
+            elif self.path == '/upstream/litellm':
+                try:
+                    req = urllib.request.Request(f"{LITELLM_URL}/health/liveliness")
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        self._send_json({"upstream": "litellm", "status": resp.status})
+                except Exception as e:
+                    self._send_json({"upstream": "litellm", "error": str(e)}, code=502)
+            else:
+                self._send_json({"error": "Not Found"}, code=404)
+
+        def do_POST(self):
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length) if content_length > 0 else b'{}'
+
+            if self.path == '/a2a/route' or self.path == '/chat':
+                # Proxy to Agent 2 (Specialist Agent)
+                try:
+                    req = urllib.request.Request(
+                        f"{AGENT2_URL}/chat",
+                        data=body,
+                        headers={'Content-Type': 'application/json'},
+                        method='POST'
+                    )
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        res_data = json.loads(resp.read().decode('utf-8'))
+                        self._send_json(res_data, code=resp.status)
+                except Exception as e:
+                    self._send_json({"error": f"A2A delegation failed: {str(e)}"}, code=502)
+
+            elif self.path.startswith('/mcp/'):
+                tool_name = self.path.replace('/mcp/', '')
+                try:
+                    req = urllib.request.Request(
+                        f"{MCP_URL}/tools/{tool_name}",
+                        data=body,
+                        headers={'Content-Type': 'application/json'},
+                        method='POST'
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        res_data = json.loads(resp.read().decode('utf-8'))
+                        self._send_json(res_data, code=resp.status)
+                except Exception as e:
+                    self._send_json({"error": f"MCP proxy failed: {str(e)}"}, code=502)
+            else:
+                self._send_json({"error": "Unknown gateway route"}, code=404)
+
+        def log_message(self, format, *args):
+            return
+
+    if __name__ == '__main__':
+        server = HTTPServer(('0.0.0.0', 8000), GatewayHandler)
+        print("Agent Gateway listening on port 8000...")
+        server.serve_forever()
+
+  curl: |
+    #!/usr/bin/env python3
+    import sys, urllib.request
+    args = sys.argv[1:]
+    url = None
+    method = 'GET'
+    data = None
+    headers = {'User-Agent': 'curl-shim/1.0'}
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ('-X', '--request') and i + 1 < len(args):
+            method = args[i + 1].upper()
+            i += 2
+        elif arg in ('-d', '--data', '--data-raw'):
+            d_tokens = []
+            i += 1
+            while i < len(args) and not args[i].startswith('-') and not (args[i].startswith('http://') or args[i].startswith('https://')):
+                d_tokens.append(args[i])
+                i += 1
+            data = ' '.join(d_tokens).encode('utf-8')
+            if method == 'GET':
+                method = 'POST'
+        elif arg in ('-H', '--header') and i + 1 < len(args):
+            h = args[i + 1]
+            if ':' in h:
+                k, v = h.split(':', 1)
+                headers[k.strip()] = v.strip()
+            i += 2
+        elif arg.startswith('http://') or arg.startswith('https://'):
+            url = arg
+            i += 1
+        else:
+            i += 1
+    if not url:
+        for arg in args:
+            if '://' in arg or arg.startswith('localhost'):
+                url = arg if '://' in arg else 'http://' + arg
+                break
+    if not url:
+        sys.exit(1)
+    try:
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data_out = resp.read().decode('utf-8')
+            print(data_out, end='')
+            sys.exit(0 if resp.status < 400 else 1)
+    except Exception as e:
+        sys.exit(1)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-gateway
+  namespace: agent-apps
+  labels:
+    app: agent-gateway
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-gateway
+  template:
+    metadata:
+      labels:
+        app: agent-gateway
+        app.kubernetes.io/part-of: besa-agent-platform
+        tier: agent-runtime
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: agent-gateway
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              cp /etc/gateway/curl /usr/local/bin/curl && chmod +x /usr/local/bin/curl
+              python /etc/gateway/gateway.py
+          ports:
+            - containerPort: 8000
+              name: http
+          volumeMounts:
+            - name: gateway-config-volume
+              mountPath: /etc/gateway
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+      volumes:
+        - name: gateway-config-volume
+          configMap:
+            name: gateway-policy
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-gateway
+  namespace: agent-apps
+  labels:
+    app: agent-gateway
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+spec:
+  type: ClusterIP
+  selector:
+    app: agent-gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

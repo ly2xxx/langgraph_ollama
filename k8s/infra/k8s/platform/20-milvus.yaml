@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus
+  namespace: ai-platform
+  labels:
+    app: milvus
+    app.kubernetes.io/part-of: besa-ai-platform
+    tier: data-observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus
+  template:
+    metadata:
+      labels:
+        app: milvus
+        app.kubernetes.io/part-of: besa-ai-platform
+        tier: data-observability
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: milvus
+          image: milvusdb/milvus:v2.4.13
+          imagePullPolicy: IfNotPresent
+          command:
+            - milvus
+            - run
+            - standalone
+          env:
+            - name: ETCD_USE_EMBED
+              value: "true"
+            - name: ETCD_DATA_DIR
+              value: "/var/lib/milvus/etcd"
+            - name: COMMON_STORAGETYPE
+              value: "local"
+          ports:
+            - containerPort: 19530
+              name: milvus
+            - containerPort: 9091
+              name: metrics
+          volumeMounts:
+            - name: milvus-data
+              mountPath: /var/lib/milvus
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9091
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9091
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+      volumes:
+        - name: milvus-data
+          persistentVolumeClaim:
+            claimName: pvc-milvus-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus
+  namespace: ai-platform
+  labels:
+    app: milvus
+    app.kubernetes.io/part-of: besa-ai-platform
+    tier: data-observability
+spec:
+  type: ClusterIP
+  selector:
+    app: milvus
+  ports:
+    - name: milvus
+      port: 19530
+      targetPort: 19530
+    - name: metrics
+      port: 9091
+      targetPort: 9091

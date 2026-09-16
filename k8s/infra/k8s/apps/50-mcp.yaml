@@ -1,0 +1,228 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-config
+  namespace: agent-apps
+  labels:
+    app: mcp-server
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+data:
+  server.py: |
+    import json
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    ORDERS = {
+        "ORD-12345": {
+            "customer": "Jane Doe",
+            "items": [{"name": "Laptop Pro 15", "qty": 1, "price": 1299.99}],
+            "status": "shipped", "tracking": "1Z999AA10123456784", "estimated_delivery": "2025-04-12"
+        },
+        "ORD-67890": {
+            "customer": "John Smith",
+            "items": [{"name": "Wireless Mouse", "qty": 1, "price": 29.99}],
+            "status": "delivered", "tracking": "1Z999AA10987654321", "estimated_delivery": "2025-04-08"
+        },
+        "ORD-11111": {
+            "customer": "Alice Johnson",
+            "items": [{"name": "Noise Cancelling Headphones", "qty": 1, "price": 249.99}],
+            "status": "processing", "tracking": None, "estimated_delivery": "2025-04-15"
+        }
+    }
+
+    INVENTORY = {
+        "Laptop Pro 15": 23, "Wireless Mouse": 156, "USB-C Hub": 89,
+        "Noise Cancelling Headphones": 45, "Mechanical Keyboard": 67
+    }
+
+    class MCPHandler(BaseHTTPRequestHandler):
+        def _send_json(self, data, code=200):
+            self.send_response(code)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode('utf-8'))
+
+        def do_GET(self):
+            if self.path in ['/healthz', '/health']:
+                self._send_json({"status": "ok", "service": "mcp-server"})
+            elif self.path == '/tools':
+                self._send_json({
+                    "tools": [
+                        {"name": "lookup_order", "description": "Look up order status by order ID"},
+                        {"name": "check_inventory", "description": "Check stock for a product"},
+                        {"name": "initiate_return", "description": "Initiate return for an order"}
+                    ]
+                })
+            else:
+                self._send_json({"error": "Not Found"}, code=404)
+
+        def do_POST(self):
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length) if content_length > 0 else b'{}'
+            try:
+                payload = json.loads(body.decode('utf-8'))
+            except Exception:
+                payload = {}
+
+            if self.path == '/tools/lookup_order':
+                order_id = payload.get('order_id', '').upper()
+                order = ORDERS.get(order_id)
+                if order:
+                    self._send_json({"order_id": order_id, **order})
+                else:
+                    self._send_json({"error": f"Order {order_id} not found."}, code=404)
+            elif self.path == '/tools/check_inventory':
+                prod = payload.get('product_name', '')
+                qty = INVENTORY.get(prod)
+                if qty is not None:
+                    self._send_json({"product": prod, "in_stock": qty > 0, "quantity": qty})
+                else:
+                    self._send_json({"error": f"Product {prod} not found."}, code=404)
+            else:
+                self._send_json({"error": "Unknown tool endpoint"}, code=404)
+
+        def log_message(self, format, *args):
+            # Suppress noisy request logging
+            return
+
+    if __name__ == '__main__':
+        server = HTTPServer(('0.0.0.0', 8000), MCPHandler)
+        print("MCP Server listening on port 8000...")
+        server.serve_forever()
+
+  curl: |
+    #!/usr/bin/env python3
+    import sys, urllib.request
+    args = sys.argv[1:]
+    url = None
+    method = 'GET'
+    data = None
+    headers = {'User-Agent': 'curl-shim/1.0'}
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ('-X', '--request') and i + 1 < len(args):
+            method = args[i + 1].upper()
+            i += 2
+        elif arg in ('-d', '--data', '--data-raw'):
+            d_tokens = []
+            i += 1
+            while i < len(args) and not args[i].startswith('-') and not (args[i].startswith('http://') or args[i].startswith('https://')):
+                d_tokens.append(args[i])
+                i += 1
+            data = ' '.join(d_tokens).encode('utf-8')
+            if method == 'GET':
+                method = 'POST'
+        elif arg in ('-H', '--header') and i + 1 < len(args):
+            h = args[i + 1]
+            if ':' in h:
+                k, v = h.split(':', 1)
+                headers[k.strip()] = v.strip()
+            i += 2
+        elif arg.startswith('http://') or arg.startswith('https://'):
+            url = arg
+            i += 1
+        else:
+            i += 1
+    if not url:
+        for arg in args:
+            if '://' in arg or arg.startswith('localhost'):
+                url = arg if '://' in arg else 'http://' + arg
+                break
+    if not url:
+        sys.exit(1)
+    try:
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data_out = resp.read().decode('utf-8')
+            print(data_out, end='')
+            sys.exit(0 if resp.status < 400 else 1)
+    except Exception as e:
+        sys.exit(1)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server
+  namespace: agent-apps
+  labels:
+    app: mcp-server
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-server
+  template:
+    metadata:
+      labels:
+        app: mcp-server
+        app.kubernetes.io/part-of: besa-agent-platform
+        tier: agent-runtime
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: mcp-server
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              cp /etc/mcp/curl /usr/local/bin/curl && chmod +x /usr/local/bin/curl
+              python /etc/mcp/server.py
+          ports:
+            - containerPort: 8000
+              name: http
+          volumeMounts:
+            - name: mcp-config-volume
+              mountPath: /etc/mcp
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+      volumes:
+        - name: mcp-config-volume
+          configMap:
+            name: mcp-config
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-server
+  namespace: agent-apps
+  labels:
+    app: mcp-server
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+spec:
+  type: ClusterIP
+  selector:
+    app: mcp-server
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
