@@ -28,7 +28,6 @@ from coding_agent.gates import (
     _render_ruff_findings,
     _ruff_new_findings,
 )
-from coding_agent.bdd_lint import lint_bdd
 from coding_agent.report import stop_flag_set, write_run_report
 from coding_agent.schemas import ReviewVerdict
 from coding_agent.signatures import (
@@ -344,31 +343,6 @@ def author_bdd_node(state: CodingLoopState) -> dict:
         if isinstance(payload, dict):
             result.feature_gherkin = payload.get("feature_gherkin", result.feature_gherkin)
             result.feature_relative_path = payload.get("feature_relative_path", result.feature_relative_path)
-
-    # Lint BEFORE freezing. A contract with Gherkin escape sequences or empty
-    # parsers.parse values cannot be satisfied by ANY implementation, and once
-    # frozen the coding agent cannot fix it -- it just burns the budget.
-    problems = lint_bdd(result.feature_gherkin, result.step_defs_python)
-    if problems:
-        feedback = "\n".join(f"- {p}" for p in problems)
-        try:
-            result = _eng()._llm_author_bdd(llm, state, feedback=feedback)
-        except StructuredOutputError as exc:
-            return {
-                "status": "escalated",
-                "escalation_reason": f"author_bdd repair structured-output failure: {exc}",
-                "messages": [_status_message("author_bdd", False, note=str(exc)[:200])],
-            }
-        problems = lint_bdd(result.feature_gherkin, result.step_defs_python)
-        if problems:
-            return {
-                "status": "escalated",
-                "escalation_reason": "unsatisfiable_bdd_contract: " + "; ".join(
-                    p.splitlines()[0] for p in problems
-                ),
-                "messages": [_status_message("author_bdd", False,
-                                             note="drafted scenarios no implementation could pass")],
-            }
 
     jail = Jail(root=worktree_dir)  # nothing frozen yet -- these are the files being authored
     jail.write_file(result.feature_relative_path, result.feature_gherkin)
