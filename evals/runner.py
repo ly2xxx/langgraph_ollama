@@ -186,15 +186,22 @@ def verify(task: dict, target: Path) -> tuple[bool, str]:
     whole run: one pathological task must not cost the other seven.
     """
     _write_files(target, task["verify"]["files"])
+    # Run the SAME interpreter this harness is running under. A bare "python"
+    # resolves through PATH, which on Windows under uv picked the uv-managed
+    # CPython rather than the project venv -- so pytest was not importable and
+    # every task scored FAIL with "No module named pytest", whatever the agent did.
+    cmd = list(task["verify"]["cmd"])
+    if cmd and cmd[0] in ("python", "python3", "py"):
+        cmd[0] = sys.executable
     try:
         proc = subprocess.run(
-            task["verify"]["cmd"], cwd=target, capture_output=True, text=True,
+            cmd, cwd=target, capture_output=True, text=True,
             timeout=300, env={**os.environ, "PYTHONPATH": str(target)},
         )
     except subprocess.TimeoutExpired:
         return False, "verification timed out after 300s"
     except OSError as exc:
-        return False, f"could not run verification: {exc}"
+        return False, f"could not run verification ({cmd[0]}): {exc}"
     tail = (proc.stdout + proc.stderr).strip().splitlines()[-12:]
     return proc.returncode == 0, "\n".join(tail)
 
