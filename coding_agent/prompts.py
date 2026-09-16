@@ -34,6 +34,14 @@ For parameterized steps in pytest-bdd:
         context['input'] = input
 - Never use angle brackets `<param>` in step decorators without parsers (e.g. `@given('the input is "<input>"')`), as pytest-bdd treats unparsed strings as exact literal matches and will fail with StepDefinitionNotFoundError.
 - Alternatively, write exact literal @given/@when/@then steps matching each scenario directly.
+- A value that can be EMPTY needs `parsers.re`, not `parsers.parse`: `"{{param}}"` requires at least one character, so a scenario saying `the input string is ""` raises StepDefinitionNotFoundError. Use `parsers.re(r'the input string is "(?P<input>[^"]*)"')`.
+
+NEVER write backslash escapes inside Gherkin values. Gherkin is literal: `"a\t\nb"` reaches the step as the six characters a, backslash, t, backslash, n, b -- NOT as a tab and a newline. A scenario written that way cannot be satisfied by any implementation, and because these scenarios are frozen the coding agent will burn its whole budget failing to satisfy something impossible. When a case needs real whitespace, describe it in prose and construct the value in the step definition, e.g.:
+    Scenario: Collapses a tab and a newline
+      Given the input string is "a" and "b" joined by a tab and a newline
+      When collapse_whitespace is called
+      Then the result should be "a b"
+with `@given(parsers.parse('the input string is "{{a}}" and "{{b}}" joined by a tab and a newline'))` building `a + "\t\n" + b` in Python, where the escapes are real.
 
 Goal: {goal}
 Acceptance criteria:

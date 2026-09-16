@@ -47,12 +47,18 @@ def _llm_parse_target_spec(llm, goal: str, target_dir: str) -> TargetSpec:
     return invoke_structured(llm, TargetSpec, prompt)
 
 
-def _llm_author_bdd(llm, state: CodingLoopState) -> BddAuthorResult:
+def _llm_author_bdd(llm, state: CodingLoopState, feedback: str = "") -> BddAuthorResult:
     criteria = (state.get("spec") or {}).get("acceptance_criteria", [])
     prompt = AUTHOR_BDD_PROMPT.format(
         goal=state["goal"],
         acceptance_criteria="\n".join(f"- {c}" for c in criteria) or "(none extracted)",
     )
+    if feedback:
+        # One repair pass: the previous draft was mechanically unsatisfiable.
+        prompt += (
+            "\n\nYour previous draft was REJECTED before being frozen, for these reasons. "
+            "Fix every one of them:\n" + feedback
+        )
     return invoke_structured(llm, BddAuthorResult, prompt)
 
 
