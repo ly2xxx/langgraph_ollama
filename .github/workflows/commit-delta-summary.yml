@@ -1,0 +1,111 @@
+name: Commit Delta Summary
+
+# Dual-purpose: this repo's own triggers AND a reusable workflow other repos call.
+#
+#   jobs:
+#     summary:
+#       uses: ly2xxx/langgraph_ollama/.github/workflows/commit-delta-summary.yml@main
+#       secrets: inherit
+#
+# NOTE for maintainers: the composite action below is referenced by its FULL repo
+# path, not "./". Inside a reusable workflow, actions/checkout fetches the CALLER's
+# repository, so a relative path would look for the action in the consuming repo
+# and fail there while working fine here.
+on:
+  push:
+    branches: ["feature/**", "claude/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Base revision (tag, branch or SHA)"
+        required: true
+      head_ref:
+        description: "Head revision (tag, branch or SHA)"
+        required: false
+        default: "HEAD"
+      model:
+        description: "Ollama Cloud model"
+        required: false
+        default: "gpt-oss:120b-cloud"
+  workflow_call:
+    inputs:
+      base_ref:
+        type: string
+        required: false
+        default: ""
+      head_ref:
+        type: string
+        required: false
+        default: ""
+      model:
+        type: string
+        required: false
+        default: "qwen3.5:cloud"
+      max_diff_chars:
+        type: string
+        required: false
+        default: "60000"
+      comment_on_pr:
+        type: boolean
+        required: false
+        default: true
+    secrets:
+      OLLAMA_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  summarise:
+    name: Summarise delta via Ollama Cloud
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the summariser diffs two revisions, so it needs history
+
+      - name: Summarise
+        id: summary
+        uses: ly2xxx/.github/actions/commit-delta-summary@main
+        with:
+          base: ${{ inputs.base_ref || github.event.inputs.base_ref || '' }}
+          head: ${{ inputs.head_ref || github.event.inputs.head_ref || '' }}
+          model: ${{ inputs.model || github.event.inputs.model || vars.OLLAMA_MODEL || 'gpt-oss:120b-cloud' }}
+          max-diff-chars: ${{ inputs.max_diff_chars || vars.MAX_DIFF_CHARS || '60000' }}
+          ollama-api-key: ${{ secrets.OLLAMA_API_KEY }}
+
+      - name: Upload summary
+        if: steps.summary.outputs.skipped == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-delta-summary
+          path: ${{ steps.summary.outputs.summary-file }}
+          retention-days: 14
+
+      - name: Comment on the pull request
+        if: >-
+          github.event_name == 'pull_request'
+          && steps.summary.outputs.skipped == 'false'
+          && (inputs.comment_on_pr == null || inputs.comment_on_pr)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('${{ steps.summary.outputs.summary-file }}', 'utf8');
+            const marker = '<!-- commit-delta-summary -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const existing = (await github.paginate(
+              github.rest.issues.listComments, { owner, repo, issue_number }
+            )).find(c => c.body?.includes(marker));
+            const payload = `${marker}\n${body}`;
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: payload });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: payload });
+            }

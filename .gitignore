@@ -113,6 +113,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env copy*
 .envrc
 .venv
 .venvs
@@ -188,3 +189,6 @@ images/
 
 #temp data
 data_storage/
+
+#log
+logs.*

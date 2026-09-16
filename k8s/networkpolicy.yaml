@@ -1,0 +1,69 @@
+# Default-deny for the app namespace, then open only what the agent actually needs.
+# In a bank this is the difference between "it runs on Kubernetes" and "it is
+# deployable" -- an LLM app egresses to model endpoints by design, so egress is
+# the control that matters, not ingress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: langgraph-streamlit-default-deny
+  namespace: ai-apps
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: langgraph-streamlit
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: langgraph-streamlit-allow
+  namespace: ai-apps
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: langgraph-streamlit
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Only the ingress controller may reach the UI.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 8501
+  egress:
+    # Cluster DNS.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Ollama on the host. k3d maps host.k3d.internal into the node network, so
+    # this is scoped to private ranges rather than left as 0.0.0.0/0.
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+        - ipBlock:
+            cidr: 172.16.0.0/12
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 11434
+    # Tavily search over TLS. Tighten to an egress gateway / proxy CIDR in a
+    # real environment -- named here so the exception is explicit, not implicit.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports:
+        - protocol: TCP
+          port: 443

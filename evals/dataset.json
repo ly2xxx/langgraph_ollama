@@ -1,0 +1,213 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "bug-001",
+      "category": "bugfix",
+      "difficulty": "easy",
+      "goal": "Fix the bug in `collapse_whitespace` in src/textutil.py: it must collapse any run of whitespace (spaces, tabs, newlines) into a single space and strip leading/trailing whitespace. Empty or whitespace-only input must return an empty string.",
+      "seed": {
+        "src/textutil.py": "def collapse_whitespace(s):\n    # BUG: only handles literal double-spaces, ignores tabs/newlines\n    return s.replace('  ', ' ')\n",
+        "src/__init__.py": ""
+      },
+      "verify": {
+        "files": {
+          "tests/test_textutil.py": "from src.textutil import collapse_whitespace\n\ndef test_spaces():\n    assert collapse_whitespace('a   b') == 'a b'\n\ndef test_tabs_newlines():\n    assert collapse_whitespace('a\\t\\tb\\n\\nc') == 'a b c'\n\ndef test_strip():\n    assert collapse_whitespace('  a b  ') == 'a b'\n\ndef test_empty():\n    assert collapse_whitespace('   ') == ''\n"
+        },
+        "cmd": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--no-header",
+          "tests/test_textutil.py"
+        ]
+      },
+      "reference": {
+        "src/textutil.py": "import re\n\n\ndef collapse_whitespace(s):\n    return re.sub(r'\\s+', ' ', s).strip()\n"
+      }
+    },
+    {
+      "id": "bug-002",
+      "category": "bugfix",
+      "difficulty": "medium",
+      "goal": "Fix `chunk` in src/chunker.py. It must split a list into consecutive chunks of at most size n, with no empty chunks, no dropped or duplicated elements. Raise ValueError if n < 1.",
+      "seed": {
+        "src/chunker.py": "def chunk(items, n):\n    # BUG: off-by-one, drops the tail and mishandles n<1\n    out = []\n    for i in range(0, len(items) - n, n):\n        out.append(items[i:i + n])\n    return out\n",
+        "src/__init__.py": ""
+      },
+      "verify": {
+        "files": {
+          "tests/test_chunker.py": "import pytest\nfrom src.chunker import chunk\n\ndef test_exact():\n    assert chunk([1,2,3,4], 2) == [[1,2],[3,4]]\n\ndef test_tail():\n    assert chunk([1,2,3,4,5], 2) == [[1,2],[3,4],[5]]\n\ndef test_no_loss():\n    got = chunk(list(range(17)), 5)\n    assert [x for c in got for x in c] == list(range(17))\n    assert all(c for c in got)\n\ndef test_bad_n():\n    with pytest.raises(ValueError):\n        chunk([1,2], 0)\n"
+        },
+        "cmd": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--no-header",
+          "tests/test_chunker.py"
+        ]
+      },
+      "reference": {
+        "src/chunker.py": "def chunk(items, n):\n    if n < 1:\n        raise ValueError('n must be >= 1')\n    return [items[i:i + n] for i in range(0, len(items), n)]\n"
+      }
+    },
+    {
+      "id": "feat-001",
+      "category": "feature",
+      "difficulty": "easy",
+      "goal": "Add a `retry` decorator to src/retry.py. It takes `times` (int) and `exceptions` (tuple) and retries the wrapped function up to `times` total attempts, re-raising the last exception if all attempts fail. It must preserve the wrapped function's __name__ and __doc__.",
+      "seed": {
+        "src/retry.py": "# implement retry here\n",
+        "src/__init__.py": ""
+      },
+      "verify": {
+        "files": {
+          "tests/test_retry.py": "import pytest\nfrom src.retry import retry\n\ndef test_succeeds_after_failures():\n    calls = {'n': 0}\n    @retry(times=3, exceptions=(ValueError,))\n    def f():\n        calls['n'] += 1\n        if calls['n'] < 3:\n            raise ValueError('nope')\n        return 'ok'\n    assert f() == 'ok'\n    assert calls['n'] == 3\n\ndef test_reraises():\n    @retry(times=2, exceptions=(KeyError,))\n    def g():\n        raise KeyError('boom')\n    with pytest.raises(KeyError):\n        g()\n\ndef test_metadata():\n    @retry(times=1, exceptions=(Exception,))\n    def h():\n        '''docstring here'''\n        return 1\n    assert h.__name__ == 'h'\n    assert h.__doc__ == 'docstring here'\n"
+        },
+        "cmd": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--no-header",
+          "tests/test_retry.py"
+        ]
+      },
+      "reference": {
+        "src/retry.py": "import functools\n\n\ndef retry(times, exceptions):\n    def deco(fn):\n        @functools.wraps(fn)\n        def wrapper(*a, **kw):\n            last = None\n            for _ in range(times):\n                try:\n                    return fn(*a, **kw)\n                except exceptions as exc:\n                    last = exc\n            raise last\n        return wrapper\n    return deco\n"
+      }
+    },
+    {
+      "id": "feat-002",
+      "category": "feature",
+      "difficulty": "medium",
+      "goal": "Implement `TokenBucket` in src/ratelimit.py with capacity and refill_rate (tokens/sec). Method `consume(n=1, now=None)` returns True and deducts tokens if available, else returns False. Tokens refill continuously based on elapsed time and never exceed capacity. `now` is an injectable monotonic timestamp for deterministic testing.",
+      "seed": {
+        "src/ratelimit.py": "# implement TokenBucket here\n",
+        "src/__init__.py": ""
+      },
+      "verify": {
+        "files": {
+          "tests/test_ratelimit.py": "from src.ratelimit import TokenBucket\n\ndef test_initial_capacity():\n    b = TokenBucket(capacity=3, refill_rate=1.0)\n    assert b.consume(1, now=0.0) and b.consume(2, now=0.0)\n    assert not b.consume(1, now=0.0)\n\ndef test_refill():\n    b = TokenBucket(capacity=3, refill_rate=1.0)\n    assert b.consume(3, now=0.0)\n    assert not b.consume(1, now=0.0)\n    assert b.consume(1, now=1.0)\n\ndef test_cap():\n    b = TokenBucket(capacity=2, refill_rate=10.0)\n    assert b.consume(2, now=0.0)\n    assert b.consume(2, now=100.0)\n    assert not b.consume(1, now=100.0)\n"
+        },
+        "cmd": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--no-header",
+          "tests/test_ratelimit.py"
+        ]
+      },
+      "reference": {
+        "src/ratelimit.py": "import time\n\n\nclass TokenBucket:\n    def __init__(self, capacity, refill_rate):\n        self.capacity = float(capacity)\n        self.refill_rate = float(refill_rate)\n        self.tokens = float(capacity)\n        self.updated = None\n\n    def consume(self, n=1, now=None):\n        now = time.monotonic() if now is None else float(now)\n        if self.updated is None:\n            self.updated = now\n        elapsed = max(0.0, now - self.updated)\n        self.updated = now\n        self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)\n        if self.tokens >= n:\n            self.tokens -= n\n            return True\n        return False\n"
+      }
+    },
+    {
+      "id": "refac-001",
+      "category": "refactor",
+      "difficulty": "medium",
+      "goal": "Refactor src/orders.py: `total` currently mixes discount logic, tax and formatting in one function. Split it into `subtotal(items)`, `apply_discount(amount, code)` and `with_tax(amount, rate)`, and make `total(items, code, rate)` compose them. Behaviour must not change.",
+      "seed": {
+        "src/orders.py": "DISCOUNTS = {'SAVE10': 0.10, 'HALF': 0.50}\n\ndef total(items, code, rate):\n    s = 0\n    for it in items:\n        s += it['price'] * it['qty']\n    if code in DISCOUNTS:\n        s = s * (1 - DISCOUNTS[code])\n    return round(s * (1 + rate), 2)\n",
+        "src/__init__.py": ""
+      },
+      "verify": {
+        "files": {
+          "tests/test_orders.py": "from src.orders import subtotal, apply_discount, with_tax, total\n\nITEMS = [{'price': 10.0, 'qty': 2}, {'price': 5.0, 'qty': 1}]\n\ndef test_parts():\n    assert subtotal(ITEMS) == 25.0\n    assert apply_discount(100.0, 'SAVE10') == 90.0\n    assert apply_discount(100.0, 'NOPE') == 100.0\n    assert with_tax(100.0, 0.2) == 120.0\n\ndef test_composition_unchanged():\n    assert total(ITEMS, 'SAVE10', 0.2) == 27.0\n    assert total(ITEMS, 'NOPE', 0.0) == 25.0\n"
+        },
+        "cmd": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--no-header",
+          "tests/test_orders.py"
+        ]
+      },
+      "reference": {
+        "src/orders.py": "DISCOUNTS = {'SAVE10': 0.10, 'HALF': 0.50}\n\n\ndef subtotal(items):\n    return sum(it['price'] * it['qty'] for it in items)\n\n\ndef apply_discount(amount, code):\n    return amount * (1 - DISCOUNTS[code]) if code in DISCOUNTS else amount\n\n\ndef with_tax(amount, rate):\n    return round(amount * (1 + rate), 2)\n\n\ndef total(items, code, rate):\n    return with_tax(apply_discount(subtotal(items), code), rate)\n"
+      }
+    },
+    {
+      "id": "bug-003",
+      "category": "bugfix",
+      "difficulty": "hard",
+      "goal": "Fix `merge_intervals` in src/intervals.py. Given a list of [start, end] pairs it must return the minimal set of non-overlapping intervals sorted by start. Touching intervals ([1,2],[2,3]) merge. Handle unsorted input and an empty list.",
+      "seed": {
+        "src/intervals.py": "def merge_intervals(iv):\n    # BUG: assumes sorted input, drops the final interval, misses touching merges\n    out = []\n    for s, e in iv:\n        if out and s < out[-1][1]:\n            out[-1][1] = max(out[-1][1], e)\n        else:\n            out.append([s, e])\n    return out[:-1]\n",
+        "src/__init__.py": ""
+      },
+      "verify": {
+        "files": {
+          "tests/test_intervals.py": "from src.intervals import merge_intervals\n\ndef test_basic():\n    assert merge_intervals([[1,3],[2,6],[8,10]]) == [[1,6],[8,10]]\n\ndef test_unsorted():\n    assert merge_intervals([[8,10],[1,3],[2,6]]) == [[1,6],[8,10]]\n\ndef test_touching():\n    assert merge_intervals([[1,2],[2,3]]) == [[1,3]]\n\ndef test_empty():\n    assert merge_intervals([]) == []\n\ndef test_contained():\n    assert merge_intervals([[1,10],[2,3]]) == [[1,10]]\n"
+        },
+        "cmd": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--no-header",
+          "tests/test_intervals.py"
+        ]
+      },
+      "reference": {
+        "src/intervals.py": "def merge_intervals(iv):\n    if not iv:\n        return []\n    out = []\n    for s, e in sorted(iv, key=lambda p: (p[0], p[1])):\n        if out and s <= out[-1][1]:\n            out[-1][1] = max(out[-1][1], e)\n        else:\n            out.append([s, e])\n    return out\n"
+      }
+    },
+    {
+      "id": "feat-003",
+      "category": "feature",
+      "difficulty": "hard",
+      "goal": "Implement `parse_config` in src/config.py. It parses a simple INI-like string into a nested dict: `[section]` headers, `key = value` pairs, `#` comments and blank lines ignored, values trimmed. Keys before any section go under '__global__'. Raise ValueError with the line number on a malformed line.",
+      "seed": {
+        "src/config.py": "# implement parse_config here\n",
+        "src/__init__.py": ""
+      },
+      "verify": {
+        "files": {
+          "tests/test_config.py": "import pytest\nfrom src.config import parse_config\n\ndef test_sections():\n    out = parse_config('a = 1\\n[db]\\nhost = localhost\\nport = 5432\\n')\n    assert out['__global__']['a'] == '1'\n    assert out['db'] == {'host': 'localhost', 'port': '5432'}\n\ndef test_comments_blanks():\n    out = parse_config('# c\\n\\n[s]\\n  k  =  v  \\n')\n    assert out['s']['k'] == 'v'\n\ndef test_malformed():\n    with pytest.raises(ValueError) as e:\n        parse_config('[s]\\ngarbage line\\n')\n    assert '2' in str(e.value)\n"
+        },
+        "cmd": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--no-header",
+          "tests/test_config.py"
+        ]
+      },
+      "reference": {
+        "src/config.py": "def parse_config(text):\n    out = {'__global__': {}}\n    section = '__global__'\n    for i, raw in enumerate(text.splitlines(), start=1):\n        line = raw.strip()\n        if not line or line.startswith('#'):\n            continue\n        if line.startswith('[') and line.endswith(']'):\n            section = line[1:-1].strip()\n            out.setdefault(section, {})\n            continue\n        if '=' not in line:\n            raise ValueError(f'malformed line {i}: {raw!r}')\n        k, _, v = line.partition('=')\n        out.setdefault(section, {})[k.strip()] = v.strip()\n    return out\n"
+      }
+    },
+    {
+      "id": "refac-002",
+      "category": "refactor",
+      "difficulty": "easy",
+      "goal": "src/stats.py has three near-identical functions that each re-traverse the input. Extract the shared traversal into a single private module-level helper whose name starts with an underscore, and reimplement mean() and variance() to call it. Public signatures and behaviour must not change.",
+      "seed": {
+        "src/stats.py": "def mean(xs):\n    t = 0.0\n    n = 0\n    for x in xs:\n        t += x\n        n += 1\n    return t / n if n else 0.0\n\ndef variance(xs):\n    t = 0.0\n    n = 0\n    for x in xs:\n        t += x\n        n += 1\n    m = t / n if n else 0.0\n    s = 0.0\n    for x in xs:\n        s += (x - m) ** 2\n    return s / n if n else 0.0\n\ndef stddev(xs):\n    return variance(xs) ** 0.5\n",
+        "src/__init__.py": ""
+      },
+      "verify": {
+        "files": {
+          "tests/test_stats.py": "import inspect\nimport src.stats as stats\nfrom src.stats import mean, variance, stddev\n\ndef test_values_unchanged():\n    xs = [2, 4, 4, 4, 5, 5, 7, 9]\n    assert mean(xs) == 5.0\n    assert variance(xs) == 4.0\n    assert stddev(xs) == 2.0\n\ndef test_empty_unchanged():\n    assert mean([]) == 0.0 and variance([]) == 0.0\n\ndef _private_helpers():\n    return [n for n, v in vars(stats).items()\n            if n.startswith('_') and not n.startswith('__') and callable(v)]\n\ndef test_helper_extracted():\n    helpers = _private_helpers()\n    assert helpers, 'expected a private helper encapsulating the shared traversal'\n\ndef test_helper_actually_used():\n    helpers = _private_helpers()\n    used_by = [fn.__name__ for fn in (mean, variance)\n               if any(h in inspect.getsource(fn) for h in helpers)]\n    assert set(used_by) == {'mean', 'variance'}, (\n        f'helper not used by both mean and variance; used by {used_by}')\n"
+        },
+        "cmd": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--no-header",
+          "tests/test_stats.py"
+        ]
+      },
+      "reference": {
+        "src/stats.py": "def _accumulate(xs):\n    total = 0.0\n    n = 0\n    for x in xs:\n        total += x\n        n += 1\n    return total, n\n\n\ndef mean(xs):\n    total, n = _accumulate(xs)\n    return total / n if n else 0.0\n\n\ndef variance(xs):\n    total, n = _accumulate(xs)\n    if not n:\n        return 0.0\n    m = total / n\n    sq, _ = _accumulate((x - m) ** 2 for x in xs)\n    return sq / n\n\n\ndef stddev(xs):\n    return variance(xs) ** 0.5\n"
+      }
+    }
+  ]
+}

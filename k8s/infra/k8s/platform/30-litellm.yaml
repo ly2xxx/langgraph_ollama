@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: ai-platform
+  labels:
+    app: litellm
+    app.kubernetes.io/part-of: besa-ai-platform
+data:
+  config.yaml: |
+    model_list:
+      - model_name: "deepseek-v4-flash:cloud"
+        litellm_params:
+          model: "ollama/deepseek-v4-flash:cloud"
+          api_base: "http://host.k3d.internal:11434"
+      - model_name: "qwen3.5:cloud"
+        litellm_params:
+          model: "ollama/qwen3.5:cloud"
+          api_base: "http://host.k3d.internal:11434"
+      - model_name: "default-model"
+        litellm_params:
+          model: "ollama/deepseek-v4-flash:cloud"
+          api_base: "http://host.k3d.internal:11434"
+    litellm_settings:
+      drop_params: true
+      telemetry: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: ai-platform
+  labels:
+    app: litellm
+    app.kubernetes.io/part-of: besa-ai-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+        app.kubernetes.io/part-of: besa-ai-platform
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: litellm
+          image: ghcr.io/berriai/litellm:main-latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config"
+            - "/etc/litellm/config.yaml"
+            - "--port"
+            - "4000"
+          ports:
+            - containerPort: 4000
+              name: http
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://postgres:postgrespassword@postgres.ai-platform.svc.cluster.local:5432/litellm"
+            - name: STORE_MODEL_IN_DB
+              value: "True"
+            - name: LITELLM_MASTER_KEY
+              value: "sk-admin"
+            - name: UI_USERNAME
+              value: "admin"
+            - name: UI_PASSWORD
+              value: "sk-admin"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/litellm/config.yaml
+              subPath: config.yaml
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: config-volume
+          configMap:
+            name: litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: ai-platform
+  labels:
+    app: litellm
+    app.kubernetes.io/part-of: besa-ai-platform
+spec:
+  type: ClusterIP
+  selector:
+    app: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000

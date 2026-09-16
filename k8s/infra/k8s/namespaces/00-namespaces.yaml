@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-platform
+  labels:
+    app.kubernetes.io/part-of: besa-ai-platform
+    environment: local-dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent-apps
+  labels:
+    app.kubernetes.io/part-of: besa-ai-platform
+    environment: local-dev

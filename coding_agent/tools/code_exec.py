@@ -219,11 +219,16 @@ def run_command(
             "(CODING_AGENT_ALLOW_INSTALL=true) to permit them"
         )
 
+    pythonpath = str(cwd)
+    if "PYTHONPATH" in os.environ:
+        pythonpath = f"{pythonpath}{os.pathsep}{os.environ['PYTHONPATH']}"
+
     env = {
         "PATH": os.environ.get("PATH", ""),
         # Windows needs SYSTEMROOT to resolve DLLs for the Python launcher
         # and other binaries; harmless elsewhere.
         "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+        "PYTHONPATH": pythonpath,
     }
 
     try:

@@ -21,14 +21,39 @@
             "request": "launch",
             "module": "streamlit",
             "args": [
-                 "run",
-                 "app.py",
-                 "--server.port",
-                 "8515"
+                "run",
+                "app.py",
+                "--server.port",
+                "8515"
             ]
             // "program": "${file}",
             // "console": "integratedTerminal",
             // "justMyCode": true
+        },
+        {
+            "name": "Debug evals.runner selftest",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/evals/runner.py",
+            "args": [
+                "--selftest",
+                "--keep"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Debug evals.runner real test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/evals/runner.py",
+            "args": [
+                "--tasks",
+                "bug-001",
+                "--keep"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }

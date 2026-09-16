@@ -16,6 +16,16 @@ spec:
       labels:
         app.kubernetes.io/name: langgraph-streamlit
     spec:
+      # Enforce at the orchestrator what the image only prepares. The Dockerfile
+      # creates uid 10001, but nothing stopped this pod running as root until now.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
       containers:
         - name: streamlit
           image: langgraph-ollama:latest
@@ -29,6 +39,19 @@ spec:
                 name: langgraph-streamlit-config
             - secretRef:
                 name: langgraph-streamlit-secret
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # A read-only root filesystem needs explicit scratch space: Streamlit
+          # writes its config/metrics under $HOME and uses /tmp for uploads.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: streamlit-home
+              mountPath: /home/appuser/.streamlit
           resources:
             requests:
               cpu: 250m
@@ -48,7 +71,19 @@ spec:
             httpGet:
               path: /_stcore/health
               port: 8501
-            initialDelaySeconds: 15
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+          # Cold start pulls models/embeddings; a startupProbe gives that up to
+          # 2.5 min without weakening the steady-state liveness check.
+          startupProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            periodSeconds: 5
+            failureThreshold: 30
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: streamlit-home
+          emptyDir: {}

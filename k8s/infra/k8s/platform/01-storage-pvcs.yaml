@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-postgres
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: besa-ai-platform
+    tier: data-observability
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-milvus-data
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: milvus
+    app.kubernetes.io/part-of: besa-ai-platform
+    tier: data-observability
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi

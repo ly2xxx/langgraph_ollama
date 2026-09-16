@@ -26,6 +26,9 @@ better layer in front:
 
 from __future__ import annotations
 
+import json
+import os
+import re
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -44,6 +47,42 @@ _RETRY_SUFFIX = (
 # across providers.
 _METHODS = ("json_schema", "function_calling")
 
+# Going through an OpenAI-compatible gateway (LiteLLM) to an Ollama backend, the
+# json_schema guarantee is gone: langchain-ollama's native `format` parameter is
+# no longer in play, so response_format is only advisory and the model can emit
+# prose the parser rejects. The gateway still logs 200 OK, which makes this
+# failure mode invisible in gateway logs. So put the portable method first for
+# OpenAI-family clients and keep json_mode as a third rung.
+_METHODS_OPENAI = ("function_calling", "json_mode", "json_schema")
+
+
+def _methods_for(llm) -> tuple[str, ...]:
+    """Method ladder for this client, overridable by env.
+
+    CODING_AGENT_STRUCTURED_METHODS=function_calling,json_mode pins the order
+    once `python -m evals.diagnose_llm` has shown which methods actually work
+    against your gateway and model.
+    """
+    override = os.getenv("CODING_AGENT_STRUCTURED_METHODS")
+    if override:
+        methods = tuple(m.strip() for m in override.split(",") if m.strip())
+        if methods:
+            return methods
+    if type(llm).__name__ in ("ChatOpenAI", "AzureChatOpenAI"):
+        return _METHODS_OPENAI
+    return _METHODS
+
+
+def _extract_json_str(text: str) -> str:
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+    if fence:
+        return fence.group(1).strip()
+    outer = re.search(r"(\{.*\})", cleaned, re.DOTALL)
+    if outer:
+        return outer.group(1).strip()
+    return cleaned
+
 
 class StructuredOutputError(Exception):
     """All methods and retries failed to produce parseable structured output.
@@ -55,13 +94,15 @@ class StructuredOutputError(Exception):
 def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_method: int = 1) -> SchemaT:  # noqa: UP047 -- PEP 695 syntax would break older interpreters some CI/dev envs still run
     """Invoke `llm` for a `schema`-shaped structured response, robustly.
 
-    Tries each method in `_METHODS`; within a method, retries up to
+    Tries each method in `methods`; within a method, retries up to
     `retries_per_method` extra times, feeding the parse error back into the
-    prompt. Raises StructuredOutputError only when every combination fails.
+    prompt. If all methods fail, attempts direct JSON extraction from raw content.
+    Raises StructuredOutputError only when every option fails.
     """
     last_error: Exception | None = None
+    methods = _methods_for(llm)
 
-    for method in _METHODS:
+    for method in methods:
         try:
             structured = llm.with_structured_output(schema, method=method)
         except Exception as exc:  # noqa: BLE001 -- any failure here means "method unsupported"; falling through is the point
@@ -84,7 +125,29 @@ def invoke_structured(llm, schema: type[SchemaT], prompt: str, retries_per_metho
                 continue
             return result
 
+    # Fallback for models/gateways (like LiteLLM / DeepSeek / Ollama) that
+    # return plain JSON in content rather than OpenAI tool_calls / json_schema
+    if hasattr(llm, "invoke") and callable(getattr(llm, "invoke")):
+        try:
+            schema_json = json.dumps(schema.model_json_schema(), indent=2)
+            fallback_prompt = (
+                f"{prompt}\n\n"
+                f"IMPORTANT: Respond with ONLY a single valid JSON object strictly adhering to this schema:\n"
+                f"{schema_json}\n\n"
+                f"Do not include commentary or markdown fences. Escape all internal quotes and newlines."
+            )
+            msg = llm.invoke(fallback_prompt)
+            raw_text = msg.content if hasattr(msg, "content") else str(msg)
+            json_str = _extract_json_str(raw_text)
+            return schema.model_validate_json(json_str)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+
     raise StructuredOutputError(
         f"structured output failed for schema {schema.__name__} after trying "
-        f"methods {_METHODS} with {retries_per_method} retry each: {last_error}"
+        f"methods {methods} and JSON fallback with {retries_per_method} retry each on "
+        f"{type(llm).__name__}: {last_error}. "
+        f"Run `python -m evals.diagnose_llm` to see which methods your gateway "
+        f"and model actually support, then pin them with "
+        f"CODING_AGENT_STRUCTURED_METHODS."
     ) from last_error

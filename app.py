@@ -100,12 +100,17 @@ def process_uploaded_files(uploaded_files, support_types):
     return temp_file_paths
 
 def get_llm(model_selection):
-    # if model_selection == "gpt-4o-mini":
-    #     from langchain_openai import ChatOpenAI
-    #     return ChatOpenAI(model=model_selection, temperature=0)
-    # else:
-        from langchain_ollama import ChatOllama
-        return ChatOllama(model=model_selection, base_url=os.getenv('OLLAMA_BASE_URL'), temperature=0)
+    provider = os.getenv("LLM_PROVIDER") or ("openai" if (os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") or os.getenv("OPENAI_API_KEY")) else "ollama")
+    if provider in ("openai", "litellm"):
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model=model_selection,
+            base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE"),
+            api_key=os.getenv("OPENAI_API_KEY") or "sk-admin",
+            temperature=0,
+        )
+    from langchain_ollama import ChatOllama
+    return ChatOllama(model=model_selection, base_url=os.getenv('OLLAMA_BASE_URL'), temperature=0)
 
 @st.cache_resource(show_spinner="Building agent graph...")
 def build_chain(chain_selection: str, model_selection: str):

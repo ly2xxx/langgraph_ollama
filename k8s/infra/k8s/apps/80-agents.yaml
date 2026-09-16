@@ -1,0 +1,538 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-config
+  namespace: agent-apps
+  labels:
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+data:
+  LITELLM_BASE_URL: "http://litellm.ai-platform.svc.cluster.local:4000"
+  LITELLM_MODEL: "deepseek-v4-flash:cloud"
+  LITELLM_API_KEY: "sk-admin"
+  MILVUS_URI: "http://milvus.ai-platform.svc.cluster.local:19530"
+  LANGFUSE_HOST: "http://langfuse-web.ai-platform.svc.cluster.local:3000"
+  AGENT_GATEWAY_URL: "http://agent-gateway.agent-apps.svc.cluster.local:8000"
+  MCP_SERVER_URL: "http://mcp-server.agent-apps.svc.cluster.local:8000"
+  BROWSER_WS_ENDPOINT: "ws://headless-browser.agent-apps.svc.cluster.local:9222"
+
+  agent1_server.py: |
+    import json
+    import os
+    import re
+    import urllib.request
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    LITELLM_URL = os.environ.get("LITELLM_BASE_URL", "http://litellm.ai-platform.svc.cluster.local:4000")
+    LITELLM_MODEL = os.environ.get("LITELLM_MODEL", "deepseek-v4-flash:cloud")
+    LITELLM_API_KEY = os.environ.get("LITELLM_API_KEY", "sk-admin")
+    GATEWAY_URL = os.environ.get("AGENT_GATEWAY_URL", "http://agent-gateway.agent-apps.svc.cluster.local:8000")
+    MCP_URL = os.environ.get("MCP_SERVER_URL", "http://mcp-server.agent-apps.svc.cluster.local:8000")
+
+    def call_litellm(prompt, system_prompt):
+        try:
+            req_data = json.dumps({
+                "model": LITELLM_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3
+            }).encode('utf-8')
+            req = urllib.request.Request(
+                f"{LITELLM_URL}/chat/completions",
+                data=req_data,
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {LITELLM_API_KEY}'
+                },
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                res = json.loads(resp.read().decode('utf-8'))
+                return res["choices"][0]["message"]["content"]
+        except Exception as e:
+            return f"(LiteLLM call failed: {e})"
+
+    class Agent1Handler(BaseHTTPRequestHandler):
+        def _send_json(self, data, code=200):
+            self.send_response(code)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode('utf-8'))
+
+        def do_GET(self):
+            if self.path in ['/healthz', '/health']:
+                self._send_json({"ok": True, "agent": "customer-agent", "tier": "agent-runtime"})
+            elif self.path == '/status':
+                self._send_json({
+                    "agent": "customer-agent",
+                    "upstream_litellm": LITELLM_URL,
+                    "model": LITELLM_MODEL,
+                    "upstream_gateway": GATEWAY_URL
+                })
+            else:
+                self._send_json({"error": "Not Found"}, code=404)
+
+        def do_POST(self):
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length) if content_length > 0 else b'{}'
+            body_str = body.decode('utf-8', errors='ignore').strip()
+            payload = {}
+            try:
+                payload = json.loads(body_str)
+            except Exception:
+                m = re.search(r'query[:=]\s*["\']?([^"\'}]+)', body_str)
+                if m:
+                    payload = {"query": m.group(1).strip()}
+                else:
+                    payload = {"query": body_str.strip("{} ")}
+
+            query = payload.get("query", "")
+
+            # If user asks for returns or specialist topics, delegate via A2A Gateway
+            if any(k in query.lower() for k in ["return", "rma", "specialist", "refund"]):
+                try:
+                    req_payload = json.dumps(payload).encode('utf-8')
+                    req = urllib.request.Request(
+                        f"{GATEWAY_URL}/a2a/route",
+                        data=req_payload,
+                        headers={'Content-Type': 'application/json'},
+                        method='POST'
+                    )
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        res = json.loads(resp.read().decode('utf-8'))
+                        self._send_json({"agent": "customer-agent", "routed_via": "gateway", "response": res})
+                        return
+                except Exception as e:
+                    self._send_json({"agent": "customer-agent", "gateway_error": str(e)}, code=502)
+                    return
+
+            # Check for order lookup context via MCP tool
+            order_match = re.search(r'ORD-\d+', query)
+            mcp_info = ""
+            if order_match:
+                try:
+                    mcp_req = urllib.request.Request(
+                        f"{MCP_URL}/tools/lookup_order",
+                        data=json.dumps({"order_id": order_match.group(0)}).encode('utf-8'),
+                        headers={'Content-Type': 'application/json'},
+                        method='POST'
+                    )
+                    with urllib.request.urlopen(mcp_req, timeout=5) as resp:
+                        mcp_info = f"\nOrder info from MCP: {resp.read().decode('utf-8')}"
+                except Exception:
+                    pass
+
+            sys_prompt = (
+                "You are AnyCompany Shop Customer Service Agent. Assist customers politely and concisely "
+                "with general support, product questions, and order inquiries."
+            )
+            llm_text = call_litellm(f"{query}{mcp_info}", sys_prompt)
+
+            self._send_json({
+                "agent": "customer-agent",
+                "session_id": payload.get("session_id", "sess-default"),
+                "answer": llm_text,
+                "model": LITELLM_MODEL
+            })
+
+        def log_message(self, format, *args):
+            return
+
+    if __name__ == '__main__':
+        server = HTTPServer(('0.0.0.0', 8080), Agent1Handler)
+        print("Customer Agent (agent-1) listening on port 8080...")
+        server.serve_forever()
+
+  agent2_server.py: |
+    import json
+    import os
+    import re
+    import urllib.request
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    LITELLM_URL = os.environ.get("LITELLM_BASE_URL", "http://litellm.ai-platform.svc.cluster.local:4000")
+    LITELLM_MODEL = os.environ.get("LITELLM_MODEL", "deepseek-v4-flash:cloud")
+    LITELLM_API_KEY = os.environ.get("LITELLM_API_KEY", "sk-admin")
+    MCP_URL = os.environ.get("MCP_SERVER_URL", "http://mcp-server.agent-apps.svc.cluster.local:8000")
+
+    def call_litellm(prompt, system_prompt):
+        try:
+            req_data = json.dumps({
+                "model": LITELLM_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3
+            }).encode('utf-8')
+            req = urllib.request.Request(
+                f"{LITELLM_URL}/chat/completions",
+                data=req_data,
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {LITELLM_API_KEY}'
+                },
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                res = json.loads(resp.read().decode('utf-8'))
+                return res["choices"][0]["message"]["content"]
+        except Exception as e:
+            return f"(LiteLLM call failed: {e})"
+
+    class Agent2Handler(BaseHTTPRequestHandler):
+        def _send_json(self, data, code=200):
+            self.send_response(code)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode('utf-8'))
+
+        def do_GET(self):
+            if self.path in ['/healthz', '/health']:
+                self._send_json({"ok": True, "agent": "specialist-agent", "tier": "agent-runtime"})
+            elif self.path == '/status':
+                self._send_json({"agent": "specialist-agent", "upstream_litellm": LITELLM_URL, "model": LITELLM_MODEL, "mcp_url": MCP_URL})
+            else:
+                self._send_json({"error": "Not Found"}, code=404)
+
+        def do_POST(self):
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length) if content_length > 0 else b'{}'
+            body_str = body.decode('utf-8', errors='ignore').strip()
+            payload = {}
+            try:
+                payload = json.loads(body_str)
+            except Exception:
+                m = re.search(r'query[:=]\s*["\']?([^"\'}]+)', body_str)
+                if m:
+                    payload = {"query": m.group(1).strip()}
+                else:
+                    payload = {"query": body_str.strip("{} ")}
+
+            query = payload.get("query", "")
+
+            # Check for order lookup context via MCP tool
+            order_match = re.search(r'ORD-\d+', query)
+            mcp_info = ""
+            if order_match:
+                try:
+                    mcp_req = urllib.request.Request(
+                        f"{MCP_URL}/tools/lookup_order",
+                        data=json.dumps({"order_id": order_match.group(0)}).encode('utf-8'),
+                        headers={'Content-Type': 'application/json'},
+                        method='POST'
+                    )
+                    with urllib.request.urlopen(mcp_req, timeout=5) as resp:
+                        mcp_info = f"\nOrder details from MCP tool: {resp.read().decode('utf-8')}"
+                except Exception:
+                    pass
+
+            sys_prompt = (
+                "You are AnyCompany Shop Specialist Returns Agent. You handle returns, RMAs, refunds, "
+                "and item condition assessments. If no order ID is provided, ask the customer for it. "
+                "Explain our 30-day return policy and RMA procedure clearly and concisely."
+            )
+            llm_text = call_litellm(f"{query}{mcp_info}", sys_prompt)
+
+            self._send_json({
+                "agent": "specialist-agent",
+                "status": "processed",
+                "specialist_response": llm_text,
+                "model": LITELLM_MODEL
+            })
+
+        def log_message(self, format, *args):
+            return
+
+    if __name__ == '__main__':
+        server = HTTPServer(('0.0.0.0', 8080), Agent2Handler)
+        print("Specialist Agent (agent-2) listening on port 8080...")
+        server.serve_forever()
+
+
+  wait_for_platform.py: |
+    import sys, time, urllib.request, socket
+
+    litellm_url = "http://litellm.ai-platform.svc.cluster.local:4000/health/liveliness"
+    milvus_host = "milvus.ai-platform.svc.cluster.local"
+    milvus_port = 19530
+
+    print("Waiting for LiteLLM Gateway...")
+    while True:
+        try:
+            req = urllib.request.Request(litellm_url)
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    print("LiteLLM is Ready.")
+                    break
+        except Exception as e:
+            print(f"LiteLLM not ready yet ({e}), waiting 2s...")
+            time.sleep(2)
+
+    print("Waiting for Milvus Standalone...")
+    while True:
+        try:
+            with socket.create_connection((milvus_host, milvus_port), timeout=3):
+                print("Milvus is Ready.")
+                break
+        except Exception as e:
+            print(f"Milvus not ready yet ({e}), waiting 2s...")
+            time.sleep(2)
+
+    print("All platform dependencies ready!")
+
+  curl: |
+    #!/usr/bin/env python3
+    import sys, urllib.request
+    args = sys.argv[1:]
+    url = None
+    method = 'GET'
+    data = None
+    headers = {'User-Agent': 'curl-shim/1.0'}
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ('-X', '--request') and i + 1 < len(args):
+            method = args[i + 1].upper()
+            i += 2
+        elif arg in ('-d', '--data', '--data-raw'):
+            d_tokens = []
+            i += 1
+            while i < len(args) and not args[i].startswith('-') and not (args[i].startswith('http://') or args[i].startswith('https://')):
+                d_tokens.append(args[i])
+                i += 1
+            data = ' '.join(d_tokens).encode('utf-8')
+            if method == 'GET':
+                method = 'POST'
+        elif arg in ('-H', '--header') and i + 1 < len(args):
+            h = args[i + 1]
+            if ':' in h:
+                k, v = h.split(':', 1)
+                headers[k.strip()] = v.strip()
+            i += 2
+        elif arg.startswith('http://') or arg.startswith('https://'):
+            url = arg
+            i += 1
+        else:
+            i += 1
+    if not url:
+        for arg in args:
+            if '://' in arg or arg.startswith('localhost'):
+                url = arg if '://' in arg else 'http://' + arg
+                break
+    if not url:
+        sys.exit(1)
+    try:
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data_out = resp.read().decode('utf-8')
+            print(data_out, end='')
+            sys.exit(0 if resp.status < 400 else 1)
+    except Exception as e:
+        sys.exit(1)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-1
+  namespace: agent-apps
+  labels:
+    app: agent-1
+    role: agent
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-1
+  template:
+    metadata:
+      labels:
+        app: agent-1
+        role: agent
+        app.kubernetes.io/part-of: besa-agent-platform
+        tier: agent-runtime
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      initContainers:
+        - name: wait-for-platform
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - /etc/agent/wait_for_platform.py
+          volumeMounts:
+            - name: agent-config-volume
+              mountPath: /etc/agent
+      containers:
+        - name: customer-agent
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              cp /etc/agent/curl /usr/local/bin/curl && chmod +x /usr/local/bin/curl
+              python /etc/agent/agent1_server.py
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: agent-config
+          volumeMounts:
+            - name: agent-config-volume
+              mountPath: /etc/agent
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: agent-config-volume
+          configMap:
+            name: agent-config
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-1
+  namespace: agent-apps
+  labels:
+    app: agent-1
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+spec:
+  type: ClusterIP
+  selector:
+    app: agent-1
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-2
+  namespace: agent-apps
+  labels:
+    app: agent-2
+    role: agent
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-2
+  template:
+    metadata:
+      labels:
+        app: agent-2
+        role: agent
+        app.kubernetes.io/part-of: besa-agent-platform
+        tier: agent-runtime
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      initContainers:
+        - name: wait-for-platform
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - /etc/agent/wait_for_platform.py
+          volumeMounts:
+            - name: agent-config-volume
+              mountPath: /etc/agent
+      containers:
+        - name: specialist-agent
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              cp /etc/agent/curl /usr/local/bin/curl && chmod +x /usr/local/bin/curl
+              python /etc/agent/agent2_server.py
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: agent-config
+          volumeMounts:
+            - name: agent-config-volume
+              mountPath: /etc/agent
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: agent-config-volume
+          configMap:
+            name: agent-config
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-2
+  namespace: agent-apps
+  labels:
+    app: agent-2
+    app.kubernetes.io/part-of: besa-agent-platform
+    tier: agent-runtime
+spec:
+  type: ClusterIP
+  selector:
+    app: agent-2
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
