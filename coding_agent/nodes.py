@@ -637,13 +637,51 @@ def _signature_and_detail(state: CodingLoopState, phase: str) -> tuple[str, str]
     a ruff-only self_check failure (sorted rule codes) or an opaque gate error."""
     if phase == "self_check":
         report = state.get("test_report") or {}
-        failures = (report.get("pytest") or {}).get("failures") or []
+        pytest_report = report.get("pytest") or {}
+        ruff_report = report.get("ruff") or {}
+
+        # 1. Structured pytest failures are the best signal.
+        failures = pytest_report.get("failures") or []
         if failures:
             f = failures[0]
             return signature_for_failure(phase, f), f"{f.get('nodeid')}: {f.get('message')}"
+
+        # 2. Only call it a lint failure if ruff ACTUALLY failed. This used to be
+        #    the unconditional fallback, which sent every non-lint self_check
+        #    failure to diagnose as a ruff problem.
         codes = report.get("ruff_codes") or []
-        detail = "ruff findings: " + (", ".join(codes) or ((report.get("ruff") or {}).get("stdout") or "")[:400])
-        return compute_signature(phase, "ruff", "ruff", ",".join(sorted(codes)), ""), detail
+        if codes or ruff_report.get("returncode", 0) != 0:
+            detail = "ruff findings: " + (", ".join(codes) or (ruff_report.get("stdout") or "")[:400])
+            return compute_signature(phase, "ruff", "ruff", ",".join(sorted(codes)), ""), detail
+
+        # 3. pytest failed but produced no structured failures -- a collection
+        #    error (ImportError/SyntaxError), an internal error, or nothing
+        #    collected. These carry the diagnosis in stdout, not in `failures`.
+        #    Previously they fell into the ruff branch above and reached diagnose
+        #    as the string "ruff findings: " with nothing after it, signed with a
+        #    CONSTANT signature -- so the agent was told to fix a linter that was
+        #    already passing, and two such attempts tripped the "same signature
+        #    twice" rule and burned the plan. Sign on the message template, the
+        #    way the bdd_gate branch below already does.
+        rc = pytest_report.get("returncode", 0)
+        if rc != 0:
+            out = (pytest_report.get("stdout") or "") + (pytest_report.get("stderr") or "")
+            collected = (pytest_report.get("summary") or {}).get("collected", 0)
+            what = ("pytest collected no tests and exited"
+                    if not collected else "pytest failed")
+            return (
+                compute_signature(phase, "pytest", "pytest", template_message(out), ""),
+                f"{what} (returncode={rc}); this is NOT a lint failure -- "
+                f"ruff exited {ruff_report.get('returncode', 0)}:\n{out[:800]}",
+            )
+
+        # 4. Nothing identifiable: say so rather than blaming a passing tool.
+        return (
+            compute_signature(phase, "unknown", "unknown", "", ""),
+            "self_check reported failure but neither ruff nor pytest produced "
+            f"a diagnosable result (ruff rc={ruff_report.get('returncode', 0)}, "
+            f"pytest rc={pytest_report.get('returncode', 0)})",
+        )
     if phase == "review":
         review = state.get("review_result") or {}
         blocking = review.get("blocking") or []
