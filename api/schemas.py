@@ -41,6 +41,8 @@ class StartRunResponse(BaseModel):
     target_dir: str
     goal: str
     poll: str = Field(description="GET this for progress.")
+    note: str = Field(
+        description="Where the output goes. Your target folder is NOT modified.")
 
 
 class NodeEvent(BaseModel):

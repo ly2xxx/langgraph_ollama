@@ -25,9 +25,13 @@ app = FastAPI(
     version="0.1.0",
     description=(
         "Point the Coding Engineer agent at a local folder and give it a goal.\n\n"
-        "**The agent branches a git worktree off the target's HEAD**, so uncommitted "
-        "changes are invisible to it and your working tree is never edited in place. "
-        "Results land on branch `coding-engineer/<run_id>` in a worktree under `.loop/`.\n\n"
+        "**The agent branches a git worktree off the target's HEAD.** Two consequences worth "
+        "knowing before your first run:\n\n"
+        "- Uncommitted changes in the target are *invisible* to the agent.\n"
+        "- **Your target folder is never written to.** Output appears in a worktree under the "
+        "*agent repo's* `.loop/worktrees/<run_id>/`, on branch `coding-engineer/<run_id>`. "
+        "A target folder that stays empty is the design working, not a failure — "
+        "`GET /runs/{id}` reports `worktree_dir`.\n\n"
         f"Target folders allowed: `{settings.roots_description()}`.\n\n"
         "One run executes at a time; a second POST /runs returns 409 while one is active."
     ),
@@ -113,6 +117,12 @@ def start_run(req: schemas.StartRunRequest) -> schemas.StartRunResponse:
     return schemas.StartRunResponse(
         run_id=run.run_id, status=run.status, target_dir=run.target_dir,
         goal=run.goal, poll=f"/runs/{run.run_id}",
+        note=(
+            f"{target} is NOT modified. The agent works in a git worktree on branch "
+            f"coding-engineer/{run.run_id}, created under the agent repo's .loop/worktrees/. "
+            f"GET /runs/{run.run_id} reports worktree_dir as soon as intake finishes — "
+            "that is where the files appear."
+        ),
     )
 
 
