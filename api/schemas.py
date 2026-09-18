@@ -30,6 +30,19 @@ class StartRunRequest(BaseModel):
         description="What to change, in plain English. Concrete and checkable beats vague.",
         examples=["Extract the duplicate model-construction logic in app.py into a helper and update call sites."],
     )
+    test_style: Literal["bdd", "pytest"] = Field(
+        "bdd",
+        description=(
+            "How the definition of done is expressed.\n\n"
+            "**bdd** (default): a Gherkin feature file plus pytest-bdd step definitions are "
+            "authored up front and frozen, then run by the bdd_gate.\n\n"
+            "**pytest**: skips authoring entirely. Intake's acceptance criteria are the "
+            "definition of done and the agent writes plain pytest tests alongside the code, "
+            "checked by self_check. Use this when a model cannot reliably produce the BDD "
+            "artefact — authoring a whole feature file plus a step-definitions module in one "
+            "structured call is the largest and most brittle request in the loop."
+        ),
+    )
     budgets: Budgets | None = Field(None, description="Omit for engine defaults.")
     primary_model: str | None = Field(None, description="Override CODING_AGENT_PRIMARY_MODEL for this run.")
     secondary_model: str | None = Field(None, description="Override the judge/reviewer model for this run.")
@@ -57,6 +70,7 @@ class RunSummary(BaseModel):
     run_id: str
     status: Literal["running", "done", "escalated", "failed", "stopping"]
     goal: str
+    test_style: str = "bdd"
     target_dir: str
     started_at: float
     finished_at: float | None = None

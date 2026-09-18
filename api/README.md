@@ -20,6 +20,29 @@ uv run uvicorn api.main:app --reload --port 8009
 | 5 | `GET /runs/{id}` | poll: status, the per-node trace, changed files, branch, worktree |
 | 6 | `GET /runs/{id}/report` · `GET /runs/{id}/diff` | the run report and the diff once it finishes |
 
+## `test_style`: bdd or pytest
+
+`POST /runs` takes `test_style`, and it matters more than it looks.
+
+**`bdd`** (default) — the original loop. `author_bdd` writes a Gherkin feature file
+*plus* a pytest-bdd step-definitions module, freezes them, and `bdd_gate` runs them.
+
+**`pytest`** — skips `author_bdd` and `bdd_gate` entirely. Intake's acceptance
+criteria become the definition of done, the agent writes plain pytest tests
+alongside the implementation, and `self_check` is the gate.
+
+Use `pytest` when the model cannot produce the BDD artefact reliably. Asking for a
+whole feature file and a step-definitions module as escaped JSON strings in one
+structured call is the largest and most brittle request in the loop: with
+`glm-5.3:cloud` it produced 84k completion tokens in a single 675-second call, and
+under an 8192-token cap it truncated mid-JSON on every retry — the run never got
+past authoring. `pytest` mode removes that call from the graph.
+
+In `pytest` mode `self_check` is the only test gate, so **zero collected tests is a
+failure** rather than the pass it correctly is in `bdd` mode (where the only tests
+in scope are the frozen scenarios that `bdd_gate` owns). Without that, a run could
+finalize having proved nothing.
+
 ## Things the API tells you up front
 
 - **`POST /runs` rejects a target that is not inside a git repo** (400). The agent

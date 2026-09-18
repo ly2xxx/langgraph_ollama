@@ -178,13 +178,21 @@ def build_graph(checkpointer=None):
     graph.add_node("escalate", escalate_node)
 
     graph.set_entry_point("intake")
-    graph.add_conditional_edges("intake", _route_after_intake, {"author_bdd": "author_bdd", "escalate": "escalate"})
+    graph.add_conditional_edges(
+        "intake",
+        _route_after_intake,
+        {"author_bdd": "author_bdd", "plan_tot": "plan_tot", "escalate": "escalate"},
+    )
     graph.add_conditional_edges(
         "author_bdd", _route_after_author_bdd, {"plan_tot": "plan_tot", "escalate": "escalate"}
     )
     graph.add_edge("plan_tot", "code")
     graph.add_edge("code", "self_check")
-    graph.add_conditional_edges("self_check", _route_after_self_check, {"bdd_gate": "bdd_gate", "diagnose": "diagnose"})
+    graph.add_conditional_edges(
+        "self_check",
+        _route_after_self_check,
+        {"bdd_gate": "bdd_gate", "review": "review", "diagnose": "diagnose"},
+    )
     graph.add_conditional_edges("bdd_gate", _route_after_bdd_gate, {"review": "review", "diagnose": "diagnose"})
     graph.add_conditional_edges("review", _route_after_review, {"finalize": "finalize", "diagnose": "diagnose"})
     graph.add_conditional_edges(
@@ -221,7 +229,8 @@ def new_run_id() -> str:
     return f"{datetime.now().strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"  # noqa: DTZ005
 
 
-def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None):
+def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False,
+               budgets: dict | None = None, test_style: str = "bdd"):
     """Runs one goal to completion (or escalation) under the given run_id,
     yielding the same per-step `{node_name: node_update}` dicts
     `graph.stream(..., stream_mode="updates")` yields.
@@ -238,6 +247,7 @@ def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False, budg
         "target_dir": str(Path(target_dir).resolve()),
         "goal": goal,
         "hitl_bdd_approval": hitl,
+        "test_style": "pytest" if str(test_style).lower() == "pytest" else "bdd",
         "budgets": budgets or {},
         # Resolved once up front (not re-derived per node) so the report and
         # any UI show exactly what this run actually used, even if env vars
@@ -248,7 +258,8 @@ def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False, budg
     yield from graph.stream(initial_state, config=config, stream_mode="updates")
 
 
-def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None, run_id: str | None = None) -> str:
+def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None = None,
+            run_id: str | None = None, test_style: str = "bdd") -> str:
     """Runs one goal to completion (or escalation) and returns the run_id."""
     telemetry.init_telemetry()
     run_id = run_id or new_run_id()
@@ -259,7 +270,8 @@ def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None
     primary_model = (models.get("primary") or {}).get("model") or "unknown"
     final_status = None
     with telemetry.track_request("Coding Engineer CLI", primary_model, run_id=run_id):
-        for update in stream_run(run_id, target_dir, goal, hitl=hitl, budgets=budgets):
+        for update in stream_run(run_id, target_dir, goal, hitl=hitl, budgets=budgets,
+                                 test_style=test_style):
             for node_name, node_update in update.items():
                 if node_name == "__interrupt__":
                     print(f"[INTERRUPTED] {node_update}")

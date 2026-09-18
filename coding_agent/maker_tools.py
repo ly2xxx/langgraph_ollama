@@ -91,6 +91,19 @@ def _build_maker_tools(jail: Jail, budgets: Budgets) -> list:
     return [read_file, list_dir, write_file, delete_file, move_file, run_pytest]
 
 
+def _definition_of_done(state: CodingLoopState) -> str:
+    """What the maker must satisfy, which differs by test_style."""
+    if state.get("test_style") == "pytest":
+        return (
+            "Definition of done: the acceptance criteria above. There are no frozen BDD "
+            "scenarios in this mode -- you must WRITE the pytest tests that prove each "
+            "criterion, in the same attempt as the implementation. A criterion with no "
+            "test covering it is not done, and a run with no tests at all fails the gate."
+        )
+    paths = ", ".join(state.get("feature_paths", [])) or "(none)"
+    return f"Frozen BDD scenarios (do not edit): {paths}"
+
+
 def _maker_task_text(state: CodingLoopState) -> str:
     spec = state.get("spec") or {}
     lessons = state.get("lessons") or []
@@ -99,7 +112,7 @@ def _maker_task_text(state: CodingLoopState) -> str:
     return (
         f"Goal: {state['goal']}\n\n"
         f"Acceptance criteria:\n{criteria}\n\n"
-        f"Frozen BDD scenarios (do not edit): {', '.join(state.get('feature_paths', [])) or '(none)'}\n\n"
+        f"{_definition_of_done(state)}\n\n"
         f"Recent lessons from earlier attempts:\n{lesson_lines}\n\n"
         "Make the smallest change that could make the tests pass. You may read files, "
         "list directories, write files, delete files, move/rename files, and run pytest "

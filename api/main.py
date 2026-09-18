@@ -81,6 +81,7 @@ def browse(
 # ---------------------------------------------------------------- runs -------
 def _summary(r: Run) -> dict:
     return {"run_id": r.run_id, "status": r.status, "goal": r.goal,
+            "test_style": r.test_style,
             "target_dir": r.target_dir, "started_at": r.started_at,
             "finished_at": r.finished_at, "duration_s": r.duration_s,
             "event_count": len(r.events), "error": r.error}
@@ -111,6 +112,7 @@ def start_run(req: schemas.StartRunRequest) -> schemas.StartRunResponse:
             budgets=req.budgets.model_dump() if req.budgets else None,
             primary_model=req.primary_model,
             secondary_model=req.secondary_model,
+            test_style=req.test_style,
         )
     except RuntimeError as exc:
         raise HTTPException(409, str(exc)) from exc

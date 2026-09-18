@@ -81,6 +81,13 @@ class CodingLoopState(TypedDict, total=False):
     spec: dict
     feature_paths: list[str]
     hitl_bdd_approval: bool
+    # "bdd" (default): author_bdd freezes a Gherkin definition of done and
+    # bdd_gate runs it. "pytest": skip both -- intake's acceptance criteria are
+    # the definition of done and the maker writes plain pytest tests, checked by
+    # self_check. Authoring a whole feature file plus a step-definitions module
+    # in one structured call is the largest and most brittle request in the loop;
+    # pytest mode removes it for models that cannot produce it reliably.
+    test_style: str
     # planning
     candidate_plans: list[Plan]
     active_plan_id: str

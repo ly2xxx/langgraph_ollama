@@ -28,6 +28,7 @@ class Run:
     goal: str
     target_dir: str
     started_at: float
+    test_style: str = "bdd"
     status: str = "running"
     finished_at: float | None = None
     error: str | None = None
@@ -68,21 +69,23 @@ class RunRegistry:
 
     # ---- execution ---------------------------------------------------------
     def start(self, *, goal: str, target_dir: str, budgets: dict | None,
-              primary_model: str | None, secondary_model: str | None) -> Run:
+              primary_model: str | None, secondary_model: str | None,
+              test_style: str = "bdd") -> Run:
         from coding_agent.engine import new_run_id
 
         with self._lock:
             if self._active is not None:
                 raise RuntimeError(f"a run is already in progress: {self._active}")
             run_id = new_run_id()
-            run = Run(run_id=run_id, goal=goal, target_dir=target_dir, started_at=time.time())
+            run = Run(run_id=run_id, goal=goal, target_dir=target_dir,
+                      started_at=time.time(), test_style=test_style)
             self._runs[run_id] = run
             self._active = run_id
             self._evict_locked()
 
         threading.Thread(
             target=self._execute,
-            args=(run, budgets, primary_model, secondary_model),
+            args=(run, budgets, primary_model, secondary_model, test_style),
             name=f"coding-engineer-{run_id}",
             daemon=True,
         ).start()
@@ -95,7 +98,8 @@ class RunRegistry:
             self._runs.pop(r.run_id, None)
 
     def _execute(self, run: Run, budgets: dict | None,
-                 primary_model: str | None, secondary_model: str | None) -> None:
+                 primary_model: str | None, secondary_model: str | None,
+                 test_style: str = "bdd") -> None:
         from coding_agent.engine import stream_run
 
         previous_env = {}
@@ -108,7 +112,8 @@ class RunRegistry:
 
             seq = 0
             for update in stream_run(run.run_id, run.target_dir, run.goal,
-                                     hitl=False, budgets=budgets or None):
+                                     hitl=False, budgets=budgets or None,
+                                     test_style=test_style):
                 for node_name, node_update in update.items():
                     seq += 1
                     if node_name == "__interrupt__":
