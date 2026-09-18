@@ -159,7 +159,9 @@ class RunRegistry:
         from coding_agent.nodes import _loop_state_dir
         from coding_agent.report import stop_flag_path
 
-        path = stop_flag_path(run_id, _loop_state_dir())
+        with self._lock:
+            target_dir = (r.target_dir if (r := self._runs.get(run_id)) else None)
+        path = stop_flag_path(run_id, _loop_state_dir(target_dir))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("stop", encoding="utf-8")
         with self._lock:

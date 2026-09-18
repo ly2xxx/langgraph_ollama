@@ -253,7 +253,7 @@ langgraph_ollama/
 └── pyproject.toml             # MODIFIED — add: pytest, pytest-bdd, pytest-json-report, ruff
 ```
 
-Runtime state (`.loop/state/coding-engineer/...`) stays at the repo root, alongside the existing `.cache/` — it's generated state, not code, so it doesn't move under `coding_agent/`.
+Runtime state (`.loop/state/coding-engineer/...`) is generated state, not code, so it doesn't move under `coding_agent/`. It lives **beside the git repo root of the target the run was pointed at** — a run against `H:/code/sandbox/proj1` writes to `H:/code/sandbox/.loop/`. Beside rather than inside, because a worktree nested in its own repo confuses git and the two test gates would collect tests out of every past run's worktree. `CODING_AGENT_LOOP_DIR` overrides it with one fixed location; a caller with no target in hand falls back to `./.loop` relative to the process CWD.
 
 BDD runner choice: **pytest-bdd** over behave — one test runner for both gates, plays with `pytest --json-report`, one dependency family.
 

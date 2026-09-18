@@ -178,7 +178,9 @@ def intake_node(state: CodingLoopState) -> dict:
             "messages": [_status_message("intake", False, note=spec.rejection_reason or "goal rejected")],
         }
 
-    handle = create_worktree(Path(state["target_dir"]), state["run_id"], _loop_state_dir())
+    handle = create_worktree(
+        Path(state["target_dir"]), state["run_id"], _loop_state_dir(state["target_dir"])
+    )
 
     return {
         "spec": spec.model_dump(),
@@ -600,7 +602,7 @@ def review_node(state: CodingLoopState) -> dict:
     reasoning, and specifically hunts trivial-pass hacks in the step defs.
     reject requires a blocker/major finding; minor-only downgrades to
     approve_with_notes (notes land in the report, run still finalizes)."""
-    if stop_flag_set(state["run_id"], _loop_state_dir()):
+    if stop_flag_set(state["run_id"], _loop_state_dir(state.get("target_dir"))):
         return {"status": "escalated", "escalation_reason": "stopped by user", "diagnosis": {"action": "escalate"}}
 
     secondary = _eng().get_llm("secondary", temperature=0.0)
@@ -717,7 +719,7 @@ def diagnose_node(state: CodingLoopState) -> dict:
     classification buys a bounded number of free retries that don't burn an
     attempt. Routing itself is pure code -- diagnose records `diagnosis.action`
     and `_route_after_diagnose` reads it."""
-    if stop_flag_set(state["run_id"], _loop_state_dir()):
+    if stop_flag_set(state["run_id"], _loop_state_dir(state.get("target_dir"))):
         return {
             "status": "escalated",
             "escalation_reason": "stopped by user",
@@ -831,7 +833,12 @@ def _route_after_diagnose(state: CodingLoopState) -> str:
 def finalize_node(state: CodingLoopState) -> dict:
     handle = _handle_from_state(state)
     rev = worktree_commit(handle, f"coding-engineer: {state['goal'][:72]}")
-    report_path = write_run_report(state, _loop_state_dir(), outcome="done", commit_rev=rev)
+    report_path = write_run_report(
+        state,
+        _loop_state_dir(state.get("target_dir")),
+        outcome="done",
+        commit_rev=rev,
+    )
     return {"status": "done", "messages": [_status_message("finalize", True, note=f"report: {report_path}")]}
 
 
@@ -842,5 +849,10 @@ def escalate_node(state: CodingLoopState) -> dict:
     if state.get("worktree_dir"):
         handle = _handle_from_state(state)
         rev = worktree_commit(handle, f"coding-engineer: WIP, escalated ({reason})")
-    report_path = write_run_report(state, _loop_state_dir(), outcome="escalated", commit_rev=rev)
+    report_path = write_run_report(
+        state,
+        _loop_state_dir(state.get("target_dir")),
+        outcome="escalated",
+        commit_rev=rev,
+    )
     return {"status": "escalated", "messages": [_status_message("escalate", False, note=f"{reason}; report: {report_path}")]}

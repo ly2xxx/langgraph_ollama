@@ -8,6 +8,7 @@ other submodule builds on -- no LLM calls, no graph nodes, no subprocesses.
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 from typing import Annotated, TypedDict
 
@@ -118,8 +119,53 @@ class CodingLoopState(TypedDict, total=False):
 # ---------------------------------------------------------------------------
 
 
-def _loop_state_dir() -> Path:
-    return Path(os.getenv("CODING_AGENT_LOOP_DIR", ".loop")).resolve()
+def _repo_root(path: Path) -> Path | None:
+    """The git repo root containing `path`, or None if it is not in a repo."""
+    try:
+        r = subprocess.run(["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    out = r.stdout.strip()
+    return Path(out) if r.returncode == 0 and out else None
+
+
+def _loop_state_dir(target_dir: str | Path | None = None) -> Path:
+    """Where worktrees, run state and reports live.
+
+    Resolution order:
+
+    1. CODING_AGENT_LOOP_DIR, if set -- an explicit choice always wins.
+    2. Beside the target's git repo root, i.e. <repo>/../.loop. Anchoring on the
+       repo root rather than the target itself matters when the target is a
+       subdirectory: the target's own parent could still be inside the repo.
+    3. ./.loop relative to the process CWD -- the historical behaviour, kept for
+       callers that have no target (e.g. browsing past runs in the UI).
+
+    Why beside the repo and not inside it: `.loop/worktrees/<run_id>` inside the
+    target would nest a git worktree within its own repo, and self_check/bdd_gate
+    would then recurse into every past worktree -- _harness_exclude_dirs only
+    excludes `coding_agent`, not `.loop`. It also put run artefacts under whatever
+    directory the CLI or API server happened to be launched from, which is the
+    confusing behaviour this replaces.
+    """
+    explicit = os.getenv("CODING_AGENT_LOOP_DIR")
+    if explicit and explicit.strip():
+        return Path(explicit).expanduser().resolve()
+
+    if target_dir:
+        target = Path(target_dir).expanduser().resolve()
+        anchor = _repo_root(target) or target
+        parent = anchor.parent
+        # Resolve only -- the real write sites (create_worktree, write_run_report,
+        # the checkpointer) each mkdir(parents=True), so a read-only call like
+        # GET /runs/{id} never creates a stray .loop next to someone's repo.
+        if parent != anchor and os.access(parent, os.W_OK):
+            return (parent / ".loop").resolve()
+        # e.g. a repo at a filesystem/drive root, or a parent we cannot write to.
+        # Fall through to the CWD default rather than failing the run here.
+
+    return Path(".loop").resolve()
 
 
 def _status_message(node: str, ok: bool, note: str = "") -> AIMessage:

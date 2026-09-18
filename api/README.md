@@ -55,6 +55,10 @@ finalize having proved nothing.
 - **Your working tree is never edited.** Changes land on `coding-engineer/<run_id>`
   in a worktree under `.loop/worktrees/`, which `GET /runs/{id}` reports so you can
   diff and merge yourself.
+- **`.loop/` lands beside your target repo, not beside this server.** Point a run at
+  `H:/code/sandbox/proj1` and its worktrees, reports and checkpoints go to
+  `H:/code/sandbox/.loop/` — next to the repo you are working on, not wherever
+  `uvicorn` happened to be started from. See [Where run output lands](#where-run-output-lands).
 
 ## One run at a time
 
@@ -69,6 +73,40 @@ silently read each other's models.
 `POST /runs/{id}/stop` raises the engine's stop flag. The loop checks it between
 attempts, so the run ends at the next checkpoint — it is not killed mid-write, and
 the worktree is left consistent. Status goes `running → stopping → escalated`.
+
+## Where run output lands
+
+Everything a run produces lives under a single `.loop/` directory, placed **beside the
+git repo root of the target you pointed it at**:
+
+```
+H:/code/sandbox/                     <- the target repo's parent
+├── proj1/                           <- "target_dir": "H:/code/sandbox/proj1"
+└── .loop/
+    ├── worktrees/<run_id>/          <- branch coding-engineer/<run_id>, where the agent writes
+    └── state/coding-engineer/
+        ├── checkpoints.db           <- SqliteSaver; a killed run resumes from here
+        └── <run_id>/
+            ├── run-report.md        <- GET /runs/{id}/report
+            ├── state.json
+            └── STOP                 <- POST /runs/{id}/stop
+```
+
+Beside the repo rather than inside it, because a worktree nested in its own repo
+confuses git, and `self_check`/`bdd_gate` would otherwise collect tests out of every
+past run's worktree.
+
+If the target is a subdirectory of a repo, `.loop/` still anchors on the **repo root's**
+parent — the subdirectory's own parent is still inside the repo. For a non-git target
+(rejected by `POST /runs`, but reachable from the CLI) it anchors on the target itself.
+
+`CODING_AGENT_LOOP_DIR` overrides all of this with one fixed location, which is what
+the test suite uses.
+
+> Runs from before this change wrote to `.loop/` relative to whatever directory the
+> server or CLI was launched from. Those reports are still on disk, but
+> `GET /runs/{id}/report` will not find them — move the old `.loop/` beside the target,
+> or point `CODING_AGENT_LOOP_DIR` at it.
 
 ## Seeing what the agent is doing
 

@@ -122,18 +122,21 @@ def run_agent(task: dict, target: Path) -> tuple[int, bool, str, Path | None, st
     # have nothing to do with coding ability, so a bare escalated=True flag
     # cannot distinguish a weak model from a loop that never reached the code.
     reason = str(final.get("escalation_reason") or "")
-    print(f"    report: {report_path_for(run_id)}")
+    print(f"    report: {report_path_for(run_id, target)}")
     wt = _worktree_of(final)
     if wt is None:
         return attempts, escalated, reason, None, "agent produced no worktree_dir (intake failed?)"
     return attempts, escalated, reason, wt, None
 
 
-def report_path_for(run_id: str) -> Path:
+def report_path_for(run_id: str, target: Path | str | None = None) -> Path:
     """Same location run_cli prints. The loop writes a report on BOTH outcomes --
-    done and escalated -- so there is always one to read after a failed task."""
+    done and escalated -- so there is always one to read after a failed task.
+
+    `target` is the task's temp repo: .loop now lives beside it, so without it
+    this points at the harness's own CWD instead of where the run actually wrote."""
     from coding_agent.nodes import _loop_state_dir
-    return _loop_state_dir() / "state" / "coding-engineer" / run_id / "run-report.md"
+    return _loop_state_dir(target) / "state" / "coding-engineer" / run_id / "run-report.md"
 
 
 def _worktree_of(state: dict) -> Path | None:
