@@ -208,9 +208,11 @@ class CodingEngineer:
     """Matches the file-layout plan (CODING_ENGINEER.md §5): `CodingEngineer().create_graph()`
     is what app.py calls in Phase 4. Owns the SqliteSaver checkpointer lifecycle."""
 
-    def create_graph(self):
+    def create_graph(self, target_dir: str | Path | None = None):
         ##### 1b. Checkpointer: Durable graph state checkpointing in SQLite
-        loop_dir = _loop_state_dir()
+        # target_dir anchors .loop beside the target repo rather than beside
+        # whatever directory the CLI/API/Streamlit host happened to start in.
+        loop_dir = _loop_state_dir(target_dir)
         db_path = loop_dir / "state" / "coding-engineer" / "checkpoints.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(db_path), check_same_thread=False)
@@ -241,10 +243,11 @@ def stream_run(run_id: str, target_dir: str, goal: str, hitl: bool = False,
     the app.py integration once it became clear the CLI's inline loop
     would otherwise have to be duplicated for the UI.
     """
-    graph = CodingEngineer().create_graph()
+    resolved_target = str(Path(target_dir).expanduser().resolve())
+    graph = CodingEngineer().create_graph(resolved_target)
     initial_state: CodingLoopState = {
         "run_id": run_id,
-        "target_dir": str(Path(target_dir).resolve()),
+        "target_dir": resolved_target,
         "goal": goal,
         "hitl_bdd_approval": hitl,
         "test_style": "pytest" if str(test_style).lower() == "pytest" else "bdd",
@@ -280,7 +283,9 @@ def run_cli(target_dir: str, goal: str, hitl: bool = False, budgets: dict | None
                 print(f"[{node_name}] status={status}")
                 final_status = status or final_status
 
-    report_path = _loop_state_dir() / "state" / "coding-engineer" / run_id / "run-report.md"
+    report_path = (
+        _loop_state_dir(target_dir) / "state" / "coding-engineer" / run_id / "run-report.md"
+    )
     print(f"final status: {final_status}")
     print(f"report: {report_path}")
     return run_id

@@ -147,28 +147,32 @@ def get_run(run_id: str, events: bool = Query(True, description="Include the per
         "worktree_dir": state.get("worktree_dir"),
         "branch": state.get("branch"),
         "changed_files": [f[len("+++ b/"):] for f in changed],
-        "report_path": str(report) if (report := _report_path(run_id)) and report.exists() else None,
+        "report_path": str(report) if (report := _report_path(run)) and report.exists() else None,
         "events": run.events if events else [],
     }
     return detail
 
 
-def _report_path(run_id: str) -> Path | None:
+def _report_path(run: Run) -> Path | None:
     """Where the engine writes the run report, or None if the agent package is
     not importable. A broken agent environment should degrade this endpoint,
-    not turn every status poll into a 500."""
+    not turn every status poll into a 500.
+
+    Takes the whole Run, not just its id, because .loop now lives beside the
+    target repo -- the path is a function of target_dir, not of this server's CWD."""
     try:
         from coding_agent.nodes import _loop_state_dir
     except Exception:  # noqa: BLE001 -- any import failure means "no report path"
         return None
-    return _loop_state_dir() / "state" / "coding-engineer" / run_id / "run-report.md"
+    loop_dir = _loop_state_dir(run.target_dir)
+    return loop_dir / "state" / "coding-engineer" / run.run_id / "run-report.md"
 
 
 @app.get("/runs/{run_id}/report", response_class=PlainTextResponse, tags=["runs"],
          summary="The run report (markdown)")
 def get_report(run_id: str) -> str:
-    _require(run_id)
-    path = _report_path(run_id)
+    run = _require(run_id)
+    path = _report_path(run)
     if path is None or not path.exists():
         raise HTTPException(404, "no report yet — the engine writes it when the run ends")
     return path.read_text(encoding="utf-8")

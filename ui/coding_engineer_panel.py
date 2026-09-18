@@ -78,11 +78,14 @@ def _apply_model_overrides(primary: str, secondary: str) -> None:
         os.environ["CODING_AGENT_SECONDARY_MODEL"] = secondary
 
 
-def _finish_view(run_id: str) -> None:
+def _finish_view(run_id: str, target_dir: str | None = None) -> None:
     """Verdict banner + diff + report for a run, read back from its state.json /
     run-report.md (written by finalize/escalate). Works for the just-finished
-    run and for any past run picked from history -- everything is on disk."""
-    run_dir = Path(_loop_state_dir()) / "state" / "coding-engineer" / run_id
+    run and for any past run picked from history -- everything is on disk.
+
+    target_dir is what locates that disk: .loop lives beside the target repo, so
+    a run against a different target writes somewhere else entirely."""
+    run_dir = Path(_loop_state_dir(target_dir)) / "state" / "coding-engineer" / run_id
     state = {}
     state_path = run_dir / "state.json"
     if state_path.exists():
@@ -120,9 +123,9 @@ def _finish_view(run_id: str) -> None:
         st.warning(f"No report found at {report_path}")
 
 
-def _remember_run(run_id: str, goal: str) -> None:
+def _remember_run(run_id: str, goal: str, target_dir: str) -> None:
     history = st.session_state.setdefault("ce_history", [])
-    history.append({"run_id": run_id, "goal": goal})
+    history.append({"run_id": run_id, "goal": goal, "target_dir": target_dir})
     st.session_state["ce_selected_run"] = run_id
 
 
@@ -146,7 +149,7 @@ def _previous_runs_view() -> None:
         format_func=lambda rid: f"{by_id[rid]['goal'][:60]}  ·  {rid}",
         key="ce_run_picker",
     )
-    _finish_view(picked)
+    _finish_view(picked, by_id[picked].get("target_dir"))
 
 
 def render_coding_engineer_panel() -> None:
@@ -212,6 +215,6 @@ def render_coding_engineer_panel() -> None:
             label=f"Run finished: {final_status}",
             state="complete" if final_status == "done" else "error",
         )
-        _remember_run(run_id, goal)
+        _remember_run(run_id, goal, target_dir)
 
     _previous_runs_view()

@@ -108,6 +108,7 @@ class CodingLoopState(TypedDict, total=False):
 * **Code Reference**: `intake_node(state)` in [`nodes.py`](file:///h:/code/yl/langgraph_ollama/coding_agent/nodes.py#L154) (LLM boundary: `_llm_parse_target_spec()` in [`llm_boundaries.py`](file:///h:/code/yl/langgraph_ollama/coding_agent/llm_boundaries.py#L41)).
 * **Schema**: [`TargetSpec`](file:///h:/code/yl/langgraph_ollama/coding_agent/schemas.py#L13) (`is_suitable`, `acceptance_criteria`, `in_scope_files`, `constraints`).
 * **Tooling**: [`create_worktree()`](file:///h:/code/yl/langgraph_ollama/coding_agent/tools/worktree.py#L49) creates a new branch (`coding-engineer/<run_id>`) in a dedicated worktree directory under `.loop/worktrees/`.
+* **Where `.loop/` is**: beside the target's git repo root, not beside whatever launched the run — a run against `H:/code/sandbox/proj1` puts worktrees, reports and checkpoints in `H:/code/sandbox/.loop/`. Set `CODING_AGENT_LOOP_DIR` to override.
 
 ### 3.2 BDD Scenario Generation: `author_bdd_node`
 
