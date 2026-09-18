@@ -148,8 +148,15 @@ def _run_maker(llm, jail: Jail, state: CodingLoopState) -> dict[str, Any]:
         system_prompt=MAKER_SYSTEM_PROMPT,
     )
     task_message = HumanMessage(content=_maker_task_text(state))
+    # Tool events fire only for handlers on the invoke config, not on the model,
+    # so the maker's read_file/write_file calls are traced by passing the model's
+    # own console handler through here.
+    config: dict = {"recursion_limit": 40}
+    handlers = getattr(llm, "callbacks", None)
+    if handlers:
+        config["callbacks"] = list(handlers)
     try:
-        res = agent.invoke({"messages": [task_message]}, config={"recursion_limit": 40})
+        res = agent.invoke({"messages": [task_message]}, config=config)
         if isinstance(res, dict) and "messages" in res and res["messages"]:
             last_msg = res["messages"][-1]
             res["output"] = getattr(last_msg, "content", str(last_msg))

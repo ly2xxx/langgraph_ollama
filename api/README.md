@@ -70,6 +70,39 @@ silently read each other's models.
 attempts, so the run ends at the next checkpoint — it is not killed mid-write, and
 the worktree is left consistent. Status goes `running → stopping → escalated`.
 
+## Seeing what the agent is doing
+
+Every LLM and tool call prints to the console (stderr), on **both** providers:
+
+```
+  [llm→] primary   ollama/glm-5.2:cloud @ http://localhost:11434  6 msg, 4.2k chars
+  [llm←] primary   3.6s  1572→249 tok  finish=stop  1 tool call(s)
+         → write_file({'path': 'main.py', 'content': 'from fastapi import FastAPI…'})
+  [tool→] write_file  path=main.py content=from fastapi import FastAPI…
+  [tool←] write_file  0.0s  wrote main.py
+```
+
+Four fields there were invisible before, each of which cost a debugging round:
+
+| | |
+|---|---|
+| `provider/model @ base_url` | which transport actually served the call — the native Ollama route has no gateway UI at all |
+| `finish=length` | the response was **truncated**; it is flagged loudly, and it is absent from LiteLLM's logs |
+| `no tool calls` | a model emitting a tool call as *prose* shows up here as zero calls while its text looks like one |
+| tokens + duration | runaway generations, per call |
+
+`CODING_AGENT_LOG_LLM=0` turns it off; `=2` also previews prompt and response text.
+
+To exercise the native Ollama transport (no gateway), set these before starting
+uvicorn — `POST /runs` overrides the model but not the provider:
+
+```
+CODING_AGENT_PRIMARY_PROVIDER=ollama
+CODING_AGENT_PRIMARY_BASE_URL=http://localhost:11434
+CODING_AGENT_SECONDARY_PROVIDER=ollama
+CODING_AGENT_SECONDARY_BASE_URL=http://localhost:11434
+```
+
 ## Configuration
 
 | Env var | Default | |

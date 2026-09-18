@@ -128,6 +128,22 @@ def max_tokens() -> int | None:
     return None if value <= 0 else value
 
 
+def _console_callbacks(role: Role, config: dict) -> list:
+    """Console tracing, attached identically to both providers.
+
+    The native-Ollama route has no gateway UI behind it, so without this there is
+    no way to see what it is doing at all -- and the OpenAI-compatible route's
+    gateway logs omit finish_reason, which is the field that distinguishes a
+    truncated response from a complete one.
+    """
+    from coding_agent.llm_logging import LLMConsoleLogger, log_level
+
+    if not log_level():
+        return []
+    return [LLMConsoleLogger(role, config.get("provider") or "?",
+                             config.get("model"), config.get("base_url"))]
+
+
 ##### 2. Dual-Model Architecture: Primary (creative, temp 0.8/0.2) vs Secondary (cold judge/reviewer, temp 0.0)
 def get_llm(role: Role, *, temperature: float = 0.0):
     """Return a chat model for the given role.
@@ -146,6 +162,7 @@ def get_llm(role: Role, *, temperature: float = 0.0):
             api_key=config.get("api_key") or "sk-admin",
             temperature=temperature,
             max_tokens=max_tokens(),
+            callbacks=_console_callbacks(role, config),
         )
 
     if provider == "ollama":
@@ -157,6 +174,7 @@ def get_llm(role: Role, *, temperature: float = 0.0):
             temperature=temperature,
             # Ollama's name for the same ceiling; -1 means unlimited there.
             num_predict=max_tokens() or -1,
+            callbacks=_console_callbacks(role, config),
         )
 
     raise UnknownProviderError(
