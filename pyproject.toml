@@ -61,6 +61,13 @@ target-version = "py312"
 ignore = ["EXE002", "UP017"]
 
 [project.optional-dependencies]
+# FastAPI wrapper (api/) — install with: uv sync --extra api
+# Optional so coding_agent/ stays importable without a web stack.
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
+
 # Observability stack — install with: uv sync --extra observability
 # Kept optional so the core app has no hard dependency on OpenTelemetry.
 observability = [

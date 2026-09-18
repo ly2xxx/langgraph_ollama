@@ -199,7 +199,10 @@ def intake_node(state: CodingLoopState) -> dict:
 
 
 def _route_after_intake(state: CodingLoopState) -> str:
-    return "escalate" if state.get("status") == "escalated" else "author_bdd"
+    if state.get("status") == "escalated":
+        return "escalate"
+    # pytest mode has no frozen BDD contract to author.
+    return "plan_tot" if state.get("test_style") == "pytest" else "author_bdd"
 
 
 def _route_after_author_bdd(state: CodingLoopState) -> str:
@@ -504,10 +507,16 @@ def self_check_node(state: CodingLoopState) -> dict:
     failures = _read_failures(report_file)
     report_file.unlink(missing_ok=True)
 
-    # pytest exits 5 when it collects zero tests -- expected when the only
-    # tests in scope ARE the frozen BDD scenarios (self_check ignores them;
-    # bdd_gate is the node responsible for actually finding and running them).
-    pytest_ok = pytest_result.returncode in (0, 5) and not pytest_result.timed_out
+    # pytest exits 5 when it collects zero tests. In BDD mode that is expected:
+    # the only tests in scope ARE the frozen scenarios, which self_check ignores
+    # and bdd_gate runs. In pytest mode self_check is the ONLY test gate, so zero
+    # collected means the agent wrote no tests and nothing was verified -- passing
+    # there would let a run finalize having proved nothing.
+    zero_collected_is_ok = state.get("test_style") != "pytest"
+    pytest_ok = (
+        pytest_result.returncode == 0
+        or (pytest_result.returncode == 5 and zero_collected_is_ok)
+    ) and not pytest_result.timed_out
     passed = ruff_passed and pytest_ok
 
     test_report = {
@@ -534,7 +543,11 @@ def self_check_node(state: CodingLoopState) -> dict:
 
 
 def _route_after_self_check(state: CodingLoopState) -> str:
-    return "bdd_gate" if state["test_report"]["passed"] else "diagnose"
+    if not state["test_report"]["passed"]:
+        return "diagnose"
+    # In pytest mode self_check IS the test gate, so a green one goes straight
+    # to the reviewer; there are no scenarios for bdd_gate to run.
+    return "review" if state.get("test_style") == "pytest" else "bdd_gate"
 
 
 ##### 11. State Machine Node 6/10: BDD Gate (Frozen BDD acceptance test verification)

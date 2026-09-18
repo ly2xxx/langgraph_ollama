@@ -94,6 +94,7 @@ def describe(role: Role) -> dict[str, str | None]:
     precedence by hand."""
     cfg = _resolve_role_config(role).copy()
     cfg.pop("api_key", None)
+    cfg["max_tokens"] = max_tokens()
     return cfg
 
 
@@ -103,6 +104,44 @@ def describe_all() -> dict[str, dict[str, str | None]]:
     run using" is answered the same way everywhere instead of three
     hand-rolled dict-building spots drifting apart."""
     return {"primary": describe("primary"), "secondary": describe("secondary")}
+
+
+# Ceiling on generated tokens per call. Without one, a model can generate until
+# the server's own limit: an author_bdd call for a hello-world goal was observed
+# producing 84,372 completion tokens over 675 seconds, which burns the run's
+# wall-clock budget on a single request. 8192 is roughly ten times the largest
+# legitimate BddAuthorResult seen (a ~300-line feature plus step definitions), so
+# it caps runaways without truncating real work. A truncated response fails fast
+# and is retried by invoke_structured; an uncapped one just stalls the run.
+_DEFAULT_MAX_TOKENS = 8192
+
+
+def max_tokens() -> int | None:
+    """Per-call output cap. CODING_AGENT_MAX_TOKENS=0 disables it."""
+    raw = os.getenv("CODING_AGENT_MAX_TOKENS")
+    if raw is None or not raw.strip():
+        return _DEFAULT_MAX_TOKENS
+    try:
+        value = int(raw)
+    except ValueError:
+        return _DEFAULT_MAX_TOKENS
+    return None if value <= 0 else value
+
+
+def _console_callbacks(role: Role, config: dict) -> list:
+    """Console tracing, attached identically to both providers.
+
+    The native-Ollama route has no gateway UI behind it, so without this there is
+    no way to see what it is doing at all -- and the OpenAI-compatible route's
+    gateway logs omit finish_reason, which is the field that distinguishes a
+    truncated response from a complete one.
+    """
+    from coding_agent.llm_logging import LLMConsoleLogger, log_level
+
+    if not log_level():
+        return []
+    return [LLMConsoleLogger(role, config.get("provider") or "?",
+                             config.get("model"), config.get("base_url"))]
 
 
 ##### 2. Dual-Model Architecture: Primary (creative, temp 0.8/0.2) vs Secondary (cold judge/reviewer, temp 0.0)
@@ -122,6 +161,8 @@ def get_llm(role: Role, *, temperature: float = 0.0):
             base_url=config["base_url"],
             api_key=config.get("api_key") or "sk-admin",
             temperature=temperature,
+            max_tokens=max_tokens(),
+            callbacks=_console_callbacks(role, config),
         )
 
     if provider == "ollama":
@@ -131,6 +172,9 @@ def get_llm(role: Role, *, temperature: float = 0.0):
             model=config["model"],
             base_url=config["base_url"],
             temperature=temperature,
+            # Ollama's name for the same ceiling; -1 means unlimited there.
+            num_predict=max_tokens() or -1,
+            callbacks=_console_callbacks(role, config),
         )
 
     raise UnknownProviderError(
