@@ -1,0 +1,245 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  @font-face { font-family: "UIVar"; src: url("file:///C:/Windows/Fonts/SegUIVar.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "Mono"; src: url("file:///C:/Windows/Fonts/CascadiaMono.ttf"); }
+  :root { --bg:#0E131C; --panel:#151C28; --line:#243044; --text:#E8EEF5; --dim:#8A97AB; --teal:#2AB3C7; --green:#3DD68C; --red:#FF4B4B; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--text); font-family: "UIVar", "Segoe UI", sans-serif; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  #glow { position: absolute; width: 1400px; height: 1400px; border-radius: 50%; background: radial-gradient(circle, rgba(42,179,199,0.16), rgba(42,179,199,0) 65%); }
+  #grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 64px 64px; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .mono { font-family: "Mono", Consolas, monospace; }
+  .h { font-weight: 750; letter-spacing: -0.02em; }
+  .center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .headline { position: absolute; left: 0; right: 0; top: 120px; text-align: center; font-size: 76px; font-weight: 760; letter-spacing: -0.025em; }
+  .headline em { font-style: normal; color: var(--teal); }
+
+  /* S1 */
+  #bubble { position: absolute; left: 260px; top: 250px; width: 1400px; background: #1B2433; border: 1px solid #2C3A52; border-radius: 28px 28px 28px 6px; padding: 40px 52px; }
+  #bubble .who { font-size: 26px; color: var(--dim); margin-bottom: 14px; }
+  #bubble .who b { color: var(--teal); font-weight: 650; }
+  #bubbleText { font-size: 62px; font-weight: 650; line-height: 1.2; min-height: 150px; }
+  #fail { position: absolute; left: 260px; top: 640px; width: 1400px; background: rgba(255,75,75,0.10); border: 2px solid var(--red); border-radius: 18px; padding: 30px 40px; font-size: 38px; color: #FFD9D9; }
+  #fail .tag { color: var(--red); font-weight: 700; }
+  #failLabel { position: absolute; left: 260px; top: 830px; font-size: 26px; color: var(--dim); }
+
+  /* S2 */
+  #title { position: absolute; left: 150px; top: 350px; font-size: 116px; white-space: nowrap; line-height: 1; }
+  #title span { color: var(--teal); }
+  #sub { position: absolute; left: 155px; top: 530px; width: 900px; font-size: 52px; line-height: 1.25; color: #C9D3E0; font-weight: 500; }
+  #panel { position: absolute; right: 150px; top: 90px; height: 900px; border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,0.55), 0 0 0 1px #2C3A52; }
+  #panelCap { position: absolute; right: 150px; top: 1000px; width: 610px; text-align: center; font-size: 22px; color: var(--dim); }
+
+  /* S3 */
+  #code { position: absolute; left: 260px; top: 270px; width: 1400px; background: #121926; border: 1px solid var(--line); border-radius: 20px; padding: 34px 44px; font-size: 29px; line-height: 1.6; }
+  #code .file { font-size: 22px; color: var(--dim); margin-bottom: 14px; display: flex; justify-content: space-between; }
+  #code .k { color: #C792EA; } #code .s { color: #F2C66D; }
+  #code .ln { opacity: 0; }
+  #lock { position: absolute; left: 1700px; top: 300px; font-size: 92px; }
+  #frozenTag { position: absolute; left: 1694px; top: 420px; font-size: 24px; font-weight: 700; color: var(--teal); letter-spacing: 0.12em; }
+  #jail { position: absolute; left: 260px; top: 760px; width: 1400px; font-size: 30px; line-height: 1.6; }
+  #jail .try { color: var(--dim); } #jail .err { color: var(--red); }
+
+  /* S4 */
+  #graph { position: absolute; left: 0; right: 0; top: 420px; height: 420px; }
+  .node { position: absolute; width: 190px; height: 86px; border-radius: 16px; border: 2px solid var(--line); background: #141B27; display: flex; align-items: center; justify-content: center; font-size: 25px; color: var(--dim); }
+  .node.on { border-color: var(--teal); color: var(--text); background: rgba(42,179,199,0.14); box-shadow: 0 0 34px rgba(42,179,199,0.35); }
+  .node.gate.on { border-color: var(--green); background: rgba(61,214,140,0.12); box-shadow: 0 0 34px rgba(61,214,140,0.3); }
+  .node.rev.on { border-color: #B79CFF; background: rgba(183,156,255,0.14); box-shadow: 0 0 34px rgba(183,156,255,0.35); }
+  .arrow { position: absolute; height: 3px; background: var(--line); }
+  .arrow.on { background: var(--teal); }
+  .tagl { position: absolute; font-size: 21px; color: var(--dim); text-align: center; width: 260px; }
+  #diag { border-style: dashed; }
+  #loopPath { position: absolute; }
+
+  /* S5 */
+  .sig { position: absolute; top: 340px; height: 120px; width: 620px; border-radius: 20px; background: #161E2B; border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; padding: 0 40px; }
+  .sig .lbl { font-size: 24px; color: var(--dim); }
+  .sig .hash { font-size: 52px; color: #F2C66D; }
+  #eq { position: absolute; left: 50%; top: 360px; transform: translateX(-50%); font-size: 80px; font-weight: 800; color: var(--red); }
+  #esc { position: absolute; left: 160px; top: 600px; width: 1600px; white-space: nowrap; background: rgba(255,75,75,0.12); border-radius: 14px; padding: 36px 44px; font-size: 37px; color: #FFDCDC; line-height: 1.35; }
+  #esc b { color: var(--red); }
+
+  /* S6 */
+  #commit { position: absolute; left: 260px; top: 300px; width: 1400px; background: #121926; border: 1px solid var(--line); border-radius: 20px; padding: 36px 44px; }
+  #commit .meta { font-size: 26px; color: var(--dim); margin-bottom: 14px; }
+  #commit .meta b { color: #F2C66D; font-weight: 500; }
+  #commit .msg { font-size: 36px; line-height: 1.4; }
+  #done { position: absolute; left: 260px; top: 620px; width: 1400px; background: rgba(61,214,140,0.13); border-radius: 14px; padding: 34px 44px; font-size: 44px; color: #D5FBE7; }
+  #doneCap { position: absolute; left: 260px; top: 760px; font-size: 26px; color: var(--dim); }
+
+  /* S7 */
+  #o1 { font-size: 150px; white-space: nowrap; text-align: center; }
+  #o1 span { color: var(--teal); }
+  #o2 { position: absolute; left: 0; right: 0; top: 640px; text-align: center; font-size: 46px; color: #C9D3E0; }
+  #o3 { position: absolute; left: 0; right: 0; top: 730px; text-align: center; font-size: 30px; color: var(--dim); }
+</style></head>
+<body><div id="stage">
+  <div id="glow"></div><div id="grid"></div>
+
+  <!-- S1 hook -->
+  <div class="scene" id="s1">
+    <div id="bubble"><div class="who"><b>Maker AI</b> · just now</div><div id="bubbleText"></div></div>
+    <div id="fail" class="mono"><span class="tag">[bdd_gate] FAIL</span> — ModuleNotFoundError: No module named 'rag_agent'</div>
+    <div id="failLabel">bdd_gate: no AI, just the frozen tests</div>
+  </div>
+
+  <!-- S2 reveal -->
+  <div class="scene" id="s2">
+    <div id="title" class="h">Coding <span>Engineer</span></div>
+    <div id="sub">The coding agent that doesn't take its own word for it.</div>
+    <img id="panel" src="panel.png">
+    <div id="panelCap">The Streamlit panel: budgets, live graph, your goal</div>
+  </div>
+
+  <!-- S3 frozen exam -->
+  <div class="scene" id="s3">
+    <div class="headline">It writes the exam first. <em>Then locks it.</em></div>
+    <div id="code" class="mono">
+      <div class="file"><span>features/migrate_run_maker.feature</span><span>read-only to the maker</span></div>
+      <div class="ln"><span class="k">Feature:</span> Migrate _run_maker from AgentExecutor to create_agent</div>
+      <div class="ln">&nbsp;&nbsp;<span class="k">Scenario:</span> create_agent is actually called inside _run_maker</div>
+      <div class="ln">&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">Given</span> the source file coding_agent/llm_boundaries.py</div>
+      <div class="ln">&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">Then</span> <span class="s">"create_agent"</span> should be called within the <span class="s">"_run_maker"</span> function</div>
+    </div>
+    <div id="lock">🔒</div><div id="frozenTag">FROZEN</div>
+    <div id="jail" class="mono">
+      <div class="try" id="jTry">maker › write_file("features/migrate_run_maker.feature", …)</div>
+      <div class="err" id="jErr">ERROR: write refused: features/migrate_run_maker.feature is frozen and cannot be modified</div>
+    </div>
+  </div>
+
+  <!-- S4 loop -->
+  <div class="scene" id="s4">
+    <div class="headline">Plans. Codes. Tests. <em>Then a second model audits it.</em></div>
+    <div id="graph"></div>
+  </div>
+
+  <!-- S5 no progress -->
+  <div class="scene" id="s5">
+    <div class="headline">Same failure twice? <em>It stops.</em></div>
+    <div class="sig mono" id="sigA" style="left:260px"><div class="lbl">attempt 1 · failure signature</div><div class="hash">aa7cc6bd</div></div>
+    <div class="sig mono" id="sigB" style="left:1040px"><div class="lbl">attempt 2 · failure signature</div><div class="hash">aa7cc6bd</div></div>
+    <div id="eq">==</div>
+    <div id="esc">⚠️ <b>escalated</b> — two_plans_exhausted (a human decides what happens next)</div>
+  </div>
+
+  <!-- S6 punchline -->
+  <div class="scene" id="s6">
+    <div class="headline">It already <em>rewrote its own engine.</em></div>
+    <div id="commit" class="mono"><div class="meta">commit <b>ea1bfa1</b> · written by the agent</div>
+      <div class="msg">coding-engineer: # Migrate `_run_maker` in coding_agent/llm_boundaries.py from the legacy</div></div>
+    <div id="done">✅ Done — review verdict: approve_with_notes</div>
+    <div id="doneCap">3 attempts · 1 plan retired · merged by a human</div>
+  </div>
+
+  <!-- S7 outro -->
+  <div class="scene" id="s7">
+    <div class="center" id="o1wrap" style="top:430px"><div id="o1" class="h">Coding <span>Engineer</span></div></div>
+    <div id="o2">Give it a goal. It works until the tests say done.</div>
+    <div id="o3" class="mono">LangGraph + Ollama · runs on its own branch · you merge</div>
+  </div>
+</div>
+
+<script>
+const SCENES = [[0,3.5],[3.5,7],[7,11],[11,15],[15,19],[19,22],[22,24.5]];
+const clamp = (x,a=0,b=1) => Math.max(a, Math.min(b, x));
+const p = (t,a,d) => clamp((t-a)/d);
+const eo = x => 1 - Math.pow(1-x, 3);
+const eback = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3*Math.pow(x-1,3) + c1*Math.pow(x-1,2); };
+const $ = id => document.getElementById(id);
+function show(el, a, dy=0, dx=0, s=1) { el.style.opacity = a; el.style.transform = `translate(${dx}px, ${dy}px) scale(${s})`; }
+function rise(el, t, start, dur=0.4, dist=40) { const k = eo(p(t,start,dur)); show(el, k, (1-k)*dist); }
+
+// --- build graph (static layout) ---
+const NODES = ["intake","author_bdd","plan_tot","code","self_check","bdd_gate","review","finalize"];
+const g = $("graph"); const X0 = 74, STEP = 226, Y = 40;
+NODES.forEach((n,i) => {
+  const d = document.createElement("div"); d.className = "node mono" + (i===4||i===5 ? " gate" : "") + (i===6 ? " rev" : "");
+  d.id = "n"+i; d.textContent = n; d.style.left = (X0 + i*STEP) + "px"; d.style.top = Y + "px"; g.appendChild(d);
+  if (i < NODES.length-1) { const a = document.createElement("div"); a.className = "arrow"; a.id = "a"+i;
+    a.style.left = (X0 + i*STEP + 190) + "px"; a.style.top = (Y+42) + "px"; a.style.width = (STEP-190) + "px"; g.appendChild(a); }
+});
+const vl = document.createElement("div"); vl.id="vline"; vl.style.cssText = `position:absolute;left:${X0+4*STEP+94}px;top:${Y+86}px;width:0;height:124px;border-left:3px dashed #243044;`; g.appendChild(vl);
+const dg = document.createElement("div"); dg.className = "node mono"; dg.id = "diag"; dg.textContent = "diagnose";
+dg.style.left = (X0 + 4*STEP) + "px"; dg.style.top = (Y + 210) + "px"; g.appendChild(dg);
+const tags = [[2,"primary proposes 3 plans,<br>secondary judges"],[6,"secondary model,<br>blind to the maker"]];
+tags.forEach(([i,txt]) => { const d = document.createElement("div"); d.className="tagl"; d.id="tag"+i; d.innerHTML = txt;
+  d.style.left = (X0 + i*STEP - 35) + "px"; d.style.top = (Y + 104) + "px"; g.appendChild(d); });
+const dt = document.createElement("div"); dt.className="tagl"; dt.id="tagd"; dt.innerHTML = "any failure → a lesson,<br>then retry or switch plans";
+dt.style.left = (X0 + 5*STEP + 10) + "px"; dt.style.top = (Y + 222) + "px"; dt.style.textAlign="left"; g.appendChild(dt);
+
+const BUBBLE = "All 6 tests pass. The migration is already complete.";
+
+window.render = function(t) {
+  // background drift
+  $("glow").style.transform = `translate(${-200 + 260*Math.sin(t*0.25)}px, ${-300 + 120*Math.cos(t*0.2)}px)`;
+  $("grid").style.transform = `translateY(${-(t*8)%64}px)`;
+
+  SCENES.forEach(([a,b], i) => {
+    const el = $("s"+(i+1));
+    const fin = eo(p(t, a, 0.3));
+    const out = i === SCENES.length-1 ? 1 : 1 - p(t, b-0.22, 0.22);
+    el.style.opacity = (t >= a && t < b + 0.001) ? Math.min(fin, out) : 0;
+  });
+
+  // S1
+  const n = Math.floor(clamp((t-0.1)/0.7) * BUBBLE.length);
+  $("bubbleText").textContent = BUBBLE.slice(0, n) + (n < BUBBLE.length && t > 0.05 ? "▍" : "");
+  rise($("bubble"), t, 0.0, 0.3, 30);
+  const fk = p(t, 1.5, 0.12);
+  const shake = t > 1.5 && t < 1.85 ? Math.sin((t-1.5)*90) * 14 * (1 - (t-1.5)/0.35) : 0;
+  show($("fail"), fk, 0, shake, 1 + 0.08*(1-eo(fk)));
+  $("bubble").style.filter = t > 1.6 ? `saturate(${1 - 0.7*p(t,1.6,0.3)})` : "none";
+  $("bubble").style.opacity = Math.min(parseFloat($("bubble").style.opacity), 1 - 0.45*p(t,1.6,0.3));
+  rise($("failLabel"), t, 1.9, 0.35, 16);
+
+  // S2
+  rise($("title"), t, 3.55, 0.45, 50);
+  rise($("sub"), t, 3.85, 0.45, 30);
+  { const k = eo(p(t, 3.7, 0.6)); show($("panel"), k, 0, (1-k)*120); }
+  rise($("panelCap"), t, 4.3, 0.4, 14);
+
+  // S3
+  rise(document.querySelector("#s3 .headline"), t, 7.05, 0.4, 30);
+  rise($("code"), t, 7.25, 0.4, 30);
+  document.querySelectorAll("#code .ln").forEach((ln, i) => { const k = eo(p(t, 7.45 + i*0.22, 0.25)); ln.style.opacity = k; ln.style.transform = `translateX(${(1-k)*-20}px)`; });
+  { const k = p(t, 8.5, 0.35); show($("lock"), k, 0, 0, 0.4 + 0.6*eback(k)); }
+  rise($("frozenTag"), t, 8.6, 0.3, 10);
+  rise($("jTry"), t, 9.0, 0.25, 12);
+  { const k = p(t, 9.35, 0.15); const sh = t > 9.35 && t < 9.65 ? Math.sin((t-9.35)*80)*8*(1-(t-9.35)/0.3) : 0; show($("jErr"), k, 0, sh); }
+
+  // S4
+  rise(document.querySelector("#s4 .headline"), t, 11.05, 0.4, 30);
+  rise($("graph"), t, 11.15, 0.4, 30);
+  NODES.forEach((_, i) => {
+    const on = t >= 11.5 + i*0.4;
+    $("n"+i).classList.toggle("on", on);
+    if (i < NODES.length-1) $("a"+i).classList.toggle("on", t >= 11.5 + i*0.4 + 0.2);
+  });
+  $("diag").classList.toggle("on", t >= 13.5 && t < 14.3); $("vline").style.borderLeftColor = (t >= 13.5 && t < 14.3) ? "#2AB3C7" : "#243044";
+  rise($("tag2"), t, 12.3, 0.3, 10); rise($("tag6"), t, 13.9, 0.3, 10); rise($("tagd"), t, 13.5, 0.3, 10);
+
+  // S5
+  rise(document.querySelector("#s5 .headline"), t, 15.05, 0.4, 30);
+  { const k = eo(p(t, 15.3, 0.4)); show($("sigA"), k, 0, (1-k)*-80); }
+  { const k = eo(p(t, 15.7, 0.4)); show($("sigB"), k, 0, (1-k)*80); }
+  { const k = p(t, 16.0, 0.3); $("eq").style.opacity = k; $("eq").style.transform = `translateX(-50%) scale(${0.3 + 0.7*eback(k)})`; }
+  { const k = p(t, 16.5, 0.14); const sh = t > 16.5 && t < 16.8 ? Math.sin((t-16.5)*85)*10*(1-(t-16.5)/0.3) : 0; show($("esc"), k, 0, sh, 1 + 0.05*(1-eo(k))); }
+
+  // S6
+  rise(document.querySelector("#s6 .headline"), t, 19.05, 0.4, 30);
+  rise($("commit"), t, 19.3, 0.45, 30);
+  { const k = eo(p(t, 20.0, 0.4)); show($("done"), k, (1-k)*24, 0, 0.96 + 0.04*k); }
+  rise($("doneCap"), t, 20.4, 0.35, 12);
+
+  // S7
+  { const k = eo(p(t, 22.05, 0.5)); $("o1wrap").style.opacity = k; $("o1wrap").style.transform = `translate(-50%, -50%) scale(${0.94 + 0.06*k})`; }
+  rise($("o2"), t, 22.4, 0.45, 24);
+  rise($("o3"), t, 22.7, 0.45, 16);
+};
+window.render(0);
+</script>
+</body></html>

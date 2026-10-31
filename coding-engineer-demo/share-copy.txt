@@ -1,0 +1,1 @@
+My coding agent's maker AI said "All 6 tests pass." The frozen test gate said ModuleNotFoundError. That's the point: Coding Engineer writes the exam first, locks it, has a second model audit the work, and stops when it hits the same failure twice. It's already rewritten part of its own engine. LangGraph + Ollama.
