@@ -1,0 +1,244 @@
+<section class="module" id="module-6" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">06</span>
+      <h1 class="module-title">Safety Rails and Debugging</h1>
+      <p class="module-subtitle">How the agent stays harmless while unattended, and where to look when a run goes sideways.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The flight simulator: practice crashes cost nothing</h2>
+        <p>Pilots learn emergencies in a simulator, where a crash just means pressing reset. Every run of the Coding Engineer gets its own simulator: a <span class="term" data-definition="A git worktree is a second working folder attached to the same Git repository, checked out on its own branch. You can edit it freely without disturbing your main folder.">git worktree</span> on a fresh <span class="term" data-definition="A branch is a parallel line of history in Git. Work on a branch doesn't affect the main line until someone merges it in.">branch</span> named <code>coding-engineer/&lt;run_id&gt;</code>. Your own checkout is never touched, and merging is always a human decision.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · tools/worktree.py</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">if</span> <span class="code-function">_is_git_repo</span>(target_dir):</span>
+<span class="code-line">        result = <span class="code-function">_run_git</span>([<span class="code-string">"worktree"</span>, <span class="code-string">"add"</span>, <span class="code-function">str</span>(worktree_dir), <span class="code-string">"-b"</span>, branch], cwd=target_dir)</span>
+<span class="code-line">        <span class="code-keyword">if</span> result.returncode != <span class="code-number">0</span>:</span>
+<span class="code-line">            <span class="code-keyword">raise</span> <span class="code-function">WorktreeError</span>(<span class="code-string">f"git worktree add failed: {result.stderr}"</span>)</span>
+<span class="code-line">        <span class="code-keyword">return</span> <span class="code-function">WorktreeHandle</span>(target_dir, worktree_dir, branch, is_fallback_copy=<span class="code-keyword">False</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If your folder is already tracked by Git…</p>
+              <p class="tl">…ask Git to create a separate working copy on a brand-new branch.</p>
+              <p class="tl">If Git reports an error (a non-zero <span class="term" data-definition="A return code (exit code) is a number a program hands back when it finishes: 0 means success, anything else means something went wrong.">return code</span>)…</p>
+              <p class="tl">…stop loudly, including Git's own error text.</p>
+              <p class="tl">Otherwise hand back a small "ticket" describing where the copy lives. (Folders that aren't Git repos get copied instead, with a throwaway repo created inside.)</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-tree">
+          <div class="ft-folder open">
+            <span class="ft-name">sandbox/</span>
+            <span class="ft-desc">Parent folder</span>
+            <div class="ft-children">
+              <div class="ft-folder"><span class="ft-name">proj1/</span><span class="ft-desc">Your repo, never edited by the agent</span></div>
+              <div class="ft-folder open">
+                <span class="ft-name">.loop/</span>
+                <span class="ft-desc">Lives <em>beside</em> the repo, not inside it</span>
+                <div class="ft-children">
+                  <div class="ft-folder"><span class="ft-name">worktrees/&lt;run_id&gt;/</span><span class="ft-desc">The simulator copy, kept for inspection</span></div>
+                  <div class="ft-file"><span class="ft-name">state/coding-engineer/checkpoints.db</span><span class="ft-desc">Saved progress for crash recovery</span></div>
+                  <div class="ft-file"><span class="ft-name">state/coding-engineer/&lt;run_id&gt;/run-report.md</span><span class="ft-desc">The human-readable report</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">An approved-tools list for commands</h2>
+        <p>The agent can run programs, but only a handful, and only in a narrow way. <span class="term" data-definition="Git is the version-control tool that tracks every change to code. It's powerful enough to run arbitrary programs via hooks and config, which is why it's tightly restricted here.">Git</span> is especially dangerous, since its options can run arbitrary programs, so even its <span class="term" data-definition="A subcommand is the second word in a command, like 'status' in 'git status'. One tool can have many subcommands that do very different things.">subcommands</span> are on an allowlist.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · tools/code_exec.py</span>
+            <pre><code><span class="code-line">_ALLOWED_BINARIES = {<span class="code-string">"pytest"</span>, <span class="code-string">"ruff"</span>, <span class="code-string">"python"</span>, <span class="code-string">"git"</span>}</span>
+<span class="code-line"></span>
+<span class="code-line">_GIT_SUBCOMMAND_ALLOWLIST = {<span class="code-string">"status"</span>, <span class="code-string">"diff"</span>, <span class="code-string">"add"</span>, <span class="code-string">"commit"</span>, <span class="code-string">"log"</span>, <span class="code-string">"rev-parse"</span>}</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Only these four programs may ever be started. Anything else, like <code>curl</code> or <code>rm</code>, is refused outright.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Git may only look and save: no push, no reset, no checkout. Flags like <code>-c</code> and <code>--exec</code> are banned too. <code>pip install</code> is blocked unless you explicitly allow it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · tools/code_exec.py (run_command)</span>
+            <pre><code><span class="code-line">    env = {</span>
+<span class="code-line">        <span class="code-string">"PATH"</span>: os.environ.<span class="code-function">get</span>(<span class="code-string">"PATH"</span>, <span class="code-string">""</span>),</span>
+<span class="code-line">        <span class="code-comment"># Windows needs SYSTEMROOT to resolve DLLs for the Python launcher</span></span>
+<span class="code-line">        <span class="code-comment"># and other binaries; harmless elsewhere.</span></span>
+<span class="code-line">        <span class="code-string">"SYSTEMROOT"</span>: os.environ.<span class="code-function">get</span>(<span class="code-string">"SYSTEMROOT"</span>, <span class="code-string">""</span>),</span>
+<span class="code-line">        <span class="code-string">"PYTHONPATH"</span>: pythonpath,</span>
+<span class="code-line">    }</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Build a stripped-down set of <span class="term" data-definition="Environment variables are named settings every program inherits from the system, like PATH or API keys. Passing only a few means secrets in your shell don't leak into the commands the agent runs.">environment variables</span> for the command:</p>
+              <p class="tl">where to find programs…</p>
+              <p class="tl">(Windows needs this next one…</p>
+              <p class="tl">…or Python won't even start.)</p>
+              <p class="tl">…a Windows system folder…</p>
+              <p class="tl">…and the worktree on Python's import path. That's the fix for Module 5's case study.</p>
+              <p class="tl">Nothing else. Your API keys and secrets aren't passed along.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Only blame the agent for its own mess</h2>
+        <p>Real repos have old problems. In one live run, <code>app.py</code> already contained a duplicate <code>import os</code>. The maker had to touch that file to fix an import, and the <span class="term" data-definition="A linter (here: ruff) scans code for mistakes and bad patterns without running it, like a grammar checker for code.">linter</span> blamed it for the old problem. The run escalated 4 times over a line the agent never wrote. The fix: <strong>compare against the starting point</strong> and count only problems that are new.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · gates.py (_ruff_new_findings)</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">for</span> f <span class="code-keyword">in</span> current:</span>
+<span class="code-line">        k = <span class="code-function">_key</span>(f, worktree_dir)</span>
+<span class="code-line">        seen[k] += <span class="code-number">1</span></span>
+<span class="code-line">        <span class="code-keyword">if</span> seen[k] &gt; baseline_counts.<span class="code-function">get</span>(k, <span class="code-number">0</span>):</span>
+<span class="code-line">            new.<span class="code-function">append</span>(f)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">For every lint problem found in the code <em>now</em>…</p>
+              <p class="tl">…label it by (file, rule), ignoring line numbers, which shift as code is edited.</p>
+              <p class="tl">Count how many of that kind we've seen so far.</p>
+              <p class="tl">If that's more than the file had at the <span class="term" data-definition="The baseline is the starting snapshot (here: the last commit before the run began). Comparing against it tells you what changed during the run.">baseline</span>…</p>
+              <p class="tl">…it's genuinely new, so the maker is responsible for it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Differential checks scale to messy codebases</strong>
+            <p>Tell an AI tool <em>"only fail on lint findings introduced since the baseline commit"</em>. This lets strict quality gates work on legacy code without someone first cleaning up years of old debt. The same file also handles moved files: it looks up the old path so moved content isn't treated as brand new.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Your debugging toolkit</h2>
+        <p>When a run behaves strangely, these are the places to look, roughly in order:</p>
+
+        <div class="icon-rows">
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-2)">📋</div>
+            <div><strong>run-report.md</strong><p>Outcome, escalation reason, every plan and score, every lesson with its fingerprint, the final diff. Read this first.</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-1)">🖨️</div>
+            <div><strong>Console trace: <code>CODING_AGENT_LOG_LLM=2</code></strong><p>One line per AI or tool call, with model, tokens, duration and <code>finish_reason</code>. If that says <code>length</code>, the answer was <em>cut off</em>.</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-4)">✂️</div>
+            <div><strong>The 8,192-token cap</strong><p>One request once produced 84,372 tokens over 675 seconds for a hello-world goal. Now every call is capped (<code>CODING_AGENT_MAX_TOKENS</code>), so a runaway fails fast instead of eating the clock.</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-3)">🧪</div>
+            <div><strong><code>python -m evals.diagnose_llm</code></strong><p>Escalating with <code>StructuredOutputError</code>? This shows which JSON methods your model and gateway support. Pin them with <code>CODING_AGENT_STRUCTURED_METHODS</code>.</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-5)">⏯️</div>
+            <div><strong>Resume with <code>--run-id</code> · stop with the STOP file</strong><p>Every step is <span class="term" data-definition="A checkpoint is a saved snapshot of the program's full state at a moment in time, so it can be restored later, like a save point in a video game.">checkpointed</span> to SQLite. Re-run with the same ID to continue. The UI's Stop button drops a flag the loop checks at the next attempt boundary.</p></div></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Spot the bug: a real one from the first live runs</h2>
+        <p>Below is a <em>reconstruction</em> of an early version of the maker's test tool (today's version lives in <code>maker_tools.py</code>). The AI kept getting <code>run_pytest() got an unexpected keyword argument 'v__args'</code>. Click the line that caused it.</p>
+
+        <div class="bug-challenge">
+          <div class="bug-code">
+            <div class="bug-line" data-line="1" onclick="checkBugLine(this, false)" data-hint="The decorator is fine. It turns the function into a tool the AI can call."><span class="line-num">1</span><code>@tool</code></div>
+            <div class="bug-line bug-target" data-line="2" onclick="checkBugLine(this, true)" data-explanation="The parameter is literally named <code>args</code>. The library that builds the tool's description (pydantic) reserves that name for Python's own <code>*args</code>, so it silently renamed it to <code>v__args</code>. The AI could never send a matching argument. The fix was renaming it to <code>pytest_args</code>, and the real file has a comment explaining why."><span class="line-num">2</span><code>def run_pytest(args: str = "") -&gt; str:</code></div>
+            <div class="bug-line" data-line="3" onclick="checkBugLine(this, false)" data-hint="Just the description the AI reads. Look at the names involved."><span class="line-num">3</span><code>    """Run pytest inside the worktree to check your work before finishing."""</code></div>
+            <div class="bug-line" data-line="4" onclick="checkBugLine(this, false)" data-hint="Splitting the string is fine. The error is about the argument's name."><span class="line-num">4</span><code>    extra = args.split() if args else []</code></div>
+            <div class="bug-line" data-line="5" onclick="checkBugLine(this, false)" data-hint="This goes through the safe command runner correctly. Look earlier."><span class="line-num">5</span><code>    result = run_command("pytest", ["-q", *extra], cwd=jail.root, timeout_s=budgets["cmd_timeout_s"])</code></div>
+          </div>
+          <div class="bug-feedback"></div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🗣️</div>
+          <div class="callout-content">
+            <strong class="callout-title">The lesson for steering AI</strong>
+            <p>When a tool-calling agent keeps "calling a tool wrong", don't assume the model is dumb. Ask your AI assistant to <em>"print the generated tool schema"</em>. The bug is often in what the model was <em>shown</em>, not in what it did.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The big picture: patterns worth stealing</h2>
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)"><div class="pattern-icon" style="background: var(--color-actor-1)">✉️</div><h4 class="pattern-title">Frozen contract</h4><p class="pattern-desc">Write acceptance tests first, then make them read-only to the coder.</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)"><div class="pattern-icon" style="background: var(--color-actor-2)">⚖️</div><h4 class="pattern-title">Maker / checker</h4><p class="pattern-desc">A different model, blind to the maker's reasoning, audits the result.</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-3)"><div class="pattern-icon" style="background: var(--color-actor-3)">🪵</div><h4 class="pattern-title">Failure fingerprints</h4><p class="pattern-desc">Same normalised failure twice means stop retrying that approach.</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)"><div class="pattern-icon" style="background: var(--color-actor-4)">🧱</div><h4 class="pattern-title">Isolation + allowlists</h4><p class="pattern-desc">Worktree sandbox, jailed paths, approved commands, clean environment.</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)"><div class="pattern-icon" style="background: var(--color-actor-5)">🙋</div><h4 class="pattern-title">Escalation is success</h4><p class="pattern-desc">An honest "I'm stuck, here's why" report beats a fake "done".</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-accent)"><div class="pattern-icon" style="background: var(--color-accent)">🔌</div><h4 class="pattern-title">LLM boundaries</h4><p class="pattern-desc">Every AI call sits in one small function, so tests can swap in a fake model and exercise everything else for real.</p></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Final check</h2>
+        <div class="quiz-container" id="quiz-module6">
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>A run escalates with <code>intake structured-output failure</code>. The console trace shows <code>finish_reason=length</code> on the intake call.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="'length' means the model hit the output cap mid-answer, so the JSON was cut off and couldn't be parsed. Raise CODING_AGENT_MAX_TOKENS or use a model that answers more concisely."
+                 data-explanation-wrong="finish_reason=length is the giveaway: the answer was truncated. A half-written JSON object can't be parsed, no matter how good the prompt is.">
+              <h3 class="quiz-question">What happened, and what's your first move?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The goal was unsuitable. Rephrase it</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The response was truncated by the token cap. Raise the cap or switch models</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The jail blocked intake from reading files</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="Pushing sends code to a shared remote, which can't be undone in the sandbox. Keeping git to local look-and-save commands is what keeps the blast radius at zero."
+               data-explanation-wrong="Think about blast radius. Everything else here stays inside the worktree. A push reaches a shared server and other people, outside the simulator.">
+            <h3 class="quiz-question">An AI suggests adding <code>push</code> to the git allowlist "so the agent can open PRs itself". What's the concern?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It would make runs slower</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>None. PRs still need human review</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It lets an unattended loop affect shared systems outside its sandbox</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="The differential check forgives findings that already existed at the baseline, so if self_check fails on ruff, the agent introduced the problem in this run."
+               data-explanation-wrong="Remember the duplicate-import story: old lint debt is forgiven by comparing against the baseline. A ruff failure in self_check means the problem is new.">
+            <h3 class="quiz-question">self_check fails with a ruff finding in a file the agent edited. Was the problem already there before the run?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Almost certainly not. Pre-existing findings are filtered out by comparing against the baseline</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Probably. ruff checks the whole repository every time</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>There's no way to tell</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module6')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module6')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

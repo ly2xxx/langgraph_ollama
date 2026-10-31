@@ -1,0 +1,209 @@
+<section class="module" id="module-5">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">05</span>
+      <h1 class="module-title">Knowing When to Quit</h1>
+      <p class="module-subtitle">Failure fingerprints, "same mistake twice" detection, and the budgets that stop an agent from spending forever.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The most expensive bug in AI agents: never stopping</h2>
+        <p>Hikers lost in a forest sometimes carve a mark on a tree. If they pass a tree with <em>their own mark</em>, they know they're walking in circles and should change direction. AI agents get lost the same way. They try the same broken fix again and again, each time saying "this should work now", while the token bill climbs.</p>
+        <p>The Coding Engineer marks its trees. Every failure gets a <strong>fingerprint</strong>, and seeing the same fingerprint twice in a row means it's going in circles.</p>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">max_attempts_per_plan = 3</code><span class="badge-desc">Tries per plan before giving up on it</span></div>
+          <div class="badge-item"><code class="badge-code">max_plans = 3</code><span class="badge-desc">How many strategies to brainstorm</span></div>
+          <div class="badge-item"><code class="badge-code">max_total_attempts = 9</code><span class="badge-desc">Hard ceiling across all plans combined</span></div>
+          <div class="badge-item"><code class="badge-code">cmd_timeout_s = 120</code><span class="badge-desc">Any single test/lint command is killed after 2 minutes</span></div>
+          <div class="badge-item"><code class="badge-code">wall_clock_s = 1800</code><span class="badge-desc">The whole run must finish within 30 minutes</span></div>
+          <div class="badge-item"><code class="badge-code">token_budget = 0</code><span class="badge-desc">Optional cap on AI usage (0 = unlimited). A hard stop, not a warning</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Taking a fingerprint of a failure</h2>
+        <p>Raw error messages change every time even when the bug hasn't: line numbers move as the code is edited, timestamps tick, memory addresses shuffle. So <code>signatures.py</code> first <strong>strips out the parts that churn</strong>, then <span class="term" data-definition="Hashing turns any text into a short, fixed-length code (like 'aa7cc6bd…'). The same input always gives the same hash, and different inputs almost never collide, which makes it a handy fingerprint.">hashes</span> what's left.</p>
+
+        <div class="layer-demo">
+          <div class="layer-tabs">
+            <button class="layer-tab active" onclick="showLayer('layer-m5-raw', this)">Raw errors</button>
+            <button class="layer-tab" onclick="showLayer('layer-m5-tpl', this)">After templating</button>
+            <button class="layer-tab" onclick="showLayer('layer-m5-sig', this)">Fingerprint</button>
+          </div>
+          <div class="layer-viewport">
+            <div class="layer" id="layer-m5-raw" style="display:block">
+              <p><strong>Attempt 1:</strong> <code>TimeoutError at 2026-07-28 17:43:16 in C:\work\db.py:42 after 3.2s</code></p>
+              <p><strong>Attempt 2:</strong> <code>TimeoutError at 2026-07-28 17:51:03 in C:\work\db.py:47 after 3.4s</code></p>
+              <p>They look different, but it's obviously the same bug.</p>
+            </div>
+            <div class="layer" id="layer-m5-tpl" style="display:none">
+              <p><strong>Attempt 1:</strong> <code>TimeoutError at &lt;ts&gt; in &lt;path&gt;:&lt;n&gt; after &lt;dur&gt;</code></p>
+              <p><strong>Attempt 2:</strong> <code>TimeoutError at &lt;ts&gt; in &lt;path&gt;:&lt;n&gt; after &lt;dur&gt;</code></p>
+              <p>Timestamps, paths, line numbers and durations are replaced with placeholders. Now they match. Assertion <em>values</em> are deliberately kept, though: "expected 3 got 5" and "expected 4 got 6" are different failures.</p>
+            </div>
+            <div class="layer" id="layer-m5-sig" style="display:none">
+              <p><code>sha1(bdd_gate | test_connect | TimeoutError | &lt;template&gt; | connect)</code></p>
+              <p>→ the same short hash both times (an illustrative example here). <strong>Same mark on the tree.</strong></p>
+            </div>
+          </div>
+          <p class="layer-description">Click the tabs to see the normalisation pipeline.</p>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · signatures.py (compute_signature)</span>
+            <pre><code><span class="code-line">    raw = <span class="code-string">"|"</span>.<span class="code-function">join</span>(</span>
+<span class="code-line">        [phase, test_name <span class="code-keyword">or</span> <span class="code-string">""</span>, error_class <span class="code-keyword">or</span> <span class="code-string">""</span>, message_template <span class="code-keyword">or</span> <span class="code-string">""</span>, top_frame_func <span class="code-keyword">or</span> <span class="code-string">""</span>]</span>
+<span class="code-line">    )</span>
+<span class="code-line">    <span class="code-keyword">return</span> hashlib.<span class="code-function">sha1</span>(raw.<span class="code-function">encode</span>(<span class="code-string">"utf-8"</span>)).<span class="code-function">hexdigest</span>()  <span class="code-comment"># id, not security</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Glue five facts together with "|" between them:</p>
+              <p class="tl">which gate failed · which test · what kind of error · the cleaned-up message · the innermost function where it blew up (name only, no line number).</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Hash it into a short fingerprint. The comment notes SHA-1 is used as an ID here, not for security.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Normalisation is a balancing act</strong>
+            <p>Strip too much and two <em>different</em> bugs look identical, so the agent quits too early. Strip too little and the <em>same</em> bug looks new every time, so it never quits. That's why the docs call the recipe "spec, not implementation detail". When an agent stops too soon or runs forever, the fingerprint recipe is the first place to look.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The doctor's decision tree</h2>
+        <p>Every failure goes to <code>diagnose</code>. An AI classifies the failure (syntax, test-logic, env, flake, design) and writes a lesson, but the <strong>routing decision is plain code</strong>, checked in this order:</p>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>Did the user press Stop?</strong><p>A STOP file on disk means escalate now. It's checked at every diagnose and review.</p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>Looks flaky (random)?</strong><p>Free retry that doesn't count as an attempt, at most 2 times, and never for a repeat fingerprint.</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>Same fingerprint as last time?</strong><p>The plan is <em>exhausted</em>. Switch to the next-best plan, or escalate if two plans have already died.</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>Any budget blown?</strong><p>Time, total attempts, tokens, or per-plan attempts mean escalate.</p></div></div>
+          <div class="step-card"><div class="step-num">5</div><div class="step-body"><strong>Otherwise: a new failure means progress</strong><p>Retry the same plan with the new lesson.</p></div></div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (diagnose_node)</span>
+            <pre><code><span class="code-line">    no_progress = prev_signature <span class="code-keyword">is not</span> <span class="code-keyword">None</span> <span class="code-keyword">and</span> signature == prev_signature</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">"We're stuck" means there <em>was</em> a previous failure and this one has exactly the same fingerprint. Note the flip side: a <em>different</em> failure counts as progress, even if it's still a failure.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (diagnose_node)</span>
+            <pre><code><span class="code-line">        <span class="code-keyword">if</span> <span class="code-function">len</span>(exhausted) &gt;= <span class="code-number">2</span> <span class="code-keyword">or not</span> remaining <span class="code-keyword">or</span> hard_budget:</span>
+<span class="code-line">            base = <span class="code-function">_escalate</span>(hard_budget <span class="code-keyword">or</span> (<span class="code-string">"two_plans_exhausted"</span> <span class="code-keyword">if</span> <span class="code-function">len</span>(exhausted) &gt;= <span class="code-number">2</span> <span class="code-keyword">else</span> <span class="code-string">"no_progress"</span>))</span>
+<span class="code-line">            base[<span class="code-string">"exhausted_plan_ids"</span>] = exhausted</span>
+<span class="code-line">            <span class="code-keyword">return</span> base</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Give up if two plans have now died, OR no plans are left, OR a hard budget is blown…</p>
+              <p class="tl">…and record the reason: the budget that ran out, or "two_plans_exhausted", or "no_progress".</p>
+              <p class="tl">Note which plans died, for the report.</p>
+              <p class="tl">Hand the result back. The router sends it to escalate.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🤔</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why stop at two dead plans, not three?</strong>
+            <p>All plans are scored using the same accumulated lessons. If two in a row hit the same wall, the lessons have probably steered into a dead end, and a third plan built on them would likely hit it too. At that point it's cheaper to hand the problem to a person.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Case study: the confident maker vs. the honest gate</h2>
+        <p>A real run from the README. Goal: <em>"Move rag_research_chatbot.py into a new rag_agent/ subfolder and update its imports."</em></p>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>plan-3 chosen (score 9.0). Maker moves the file.</strong><p>self_check: passed. bdd_gate: <code>ModuleNotFoundError: No module named 'rag_agent'</code></p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>Fingerprint <code>aa7cc6bd</code>. Lesson recorded. Retry.</strong><p>The maker announces: "All 6 tests pass. The migration is already complete."</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>bdd_gate fails again: <code>aa7cc6bd</code> == <code>aa7cc6bd</code></strong><p>No progress. plan-3 is exhausted. Switch to plan-1 (re-scored 7.5).</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>plan-1 hits the same fingerprint</strong><p>Two plans exhausted, so escalate with <code>two_plans_exhausted</code>. A report is written and the worktree is kept.</p></div></div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">🔎</div>
+          <div class="callout-content">
+            <strong class="callout-title">The real culprit was the environment</strong>
+            <p>The test process couldn't find the new folder: the worktree root wasn't on Python's import path (<span class="term" data-definition="PYTHONPATH is a setting that tells Python which folders to search when you write 'import something'. If a folder isn't on it, imports from that folder fail with ModuleNotFoundError.">PYTHONPATH</span>). No plan could have fixed it, which is why fast escalation was the right call. Today, the safe command runner adds the worktree to PYTHONPATH for every command. Note also that the maker's "all tests pass" claim was false. Never trust an agent's self-report over a gate.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module5">
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="A different failing test means the old problem was fixed and a new one appeared. That's progress, so the agent keeps going on the same plan."
+               data-explanation-wrong="Look at the fingerprint ingredients: the test name is one of them. A different failing test produces a different fingerprint, which counts as progress.">
+            <h3 class="quiz-question">Attempt 1 fails on <code>test_add</code>. Attempt 2 fixes that but fails on <code>test_subtract</code>. What does diagnose do?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Marks the plan exhausted, since it failed twice</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Treats it as progress and retries the same plan</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Escalates immediately</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>Your runs keep escalating with <code>two_plans_exhausted</code> after just 4 attempts, but when you read the failures, each one is clearly a <em>different</em> bug.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="If different bugs get the same fingerprint, normalisation is over-stripping (for example, removing the values that distinguish failures). Fix the recipe, not the budget."
+                 data-explanation-wrong="Different bugs should get different fingerprints. If they're being treated as 'the same twice', the templating is erasing too much. Raising budgets would just hide that.">
+              <h3 class="quiz-question">What's the most likely cause?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>max_total_attempts is too low. Raise it to 20</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The judge model is scoring plans badly</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The fingerprint recipe strips too much, so different bugs collapse into one signature</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="If every plan fails with the same environment error, the code isn't the problem. Escalating fast saves money and points a human at the real cause."
+               data-explanation-wrong="Re-read the case study. When the failure comes from the environment, not the code, no plan can fix it, and the best thing the agent can do is stop early with a clear report.">
+            <h3 class="quiz-question">In the case study, was escalating after two plans a failure of the agent?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>No. The problem was environmental, and stopping early with a report was the correct outcome</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes. It should have tried plan-2 as well</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes. It should have trusted the maker, who said tests passed</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

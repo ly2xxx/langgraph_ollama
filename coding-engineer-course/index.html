@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inside the Coding Engineer</title>
+
+  <!-- Google Fonts: Bricolage Grotesque · DM Sans · JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <!--
+    CUSTOMIZE PER COURSE — change only the three accent variables below.
+    Options:
+      vermillion  #D94F30 / #C4432A / #FDEEE9 / #E8836C  (default)
+      coral       #E06B56 / #C85A47 / #FDECEA / #E89585
+      teal        #2A7B9B / #1F6280 / #E4F2F7 / #5A9DB8
+      amber       #D4A843 / #BF9530 / #FDF5E0 / #E0C070
+      forest      #2D8B55 / #226B41 / #E8F5EE / #5AAD7A
+  -->
+  <style>
+    :root {
+      --color-accent:       #2A7B9B;
+      --color-accent-hover: #1F6280;
+      --color-accent-light: #E4F2F7;
+      --color-accent-muted: #5A9DB8;
+    }
+  </style>
+
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="nav-inner">
+      <span class="nav-title">Inside the Coding Engineer</span>
+      <div class="nav-dots" id="nav-dots" role="tablist">
+        <button class="nav-dot" data-target="module-1" data-tooltip="A Robot That Codes Until It's Done" role="tab" aria-label="Module 1: A Robot That Codes Until It's Done"></button>
+        <button class="nav-dot" data-target="module-2" data-tooltip="Ten Rooms and a Clipboard" role="tab" aria-label="Module 2: Ten Rooms and a Clipboard"></button>
+        <button class="nav-dot" data-target="module-3" data-tooltip="Sealing the Exam Before Studying" role="tab" aria-label="Module 3: Sealing the Exam Before Studying"></button>
+        <button class="nav-dot" data-target="module-4" data-tooltip="Two Brains: Makers and Checkers" role="tab" aria-label="Module 4: Two Brains: Makers and Checkers"></button>
+        <button class="nav-dot" data-target="module-5" data-tooltip="Knowing When to Quit" role="tab" aria-label="Module 5: Knowing When to Quit"></button>
+        <button class="nav-dot" data-target="module-6" data-tooltip="Safety Rails and Debugging" role="tab" aria-label="Module 6: Safety Rails and Debugging"></button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- modules/*.html content is assembled here by build.sh -->
+<section class="module" id="module-1">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">A Robot That Codes Until It's Done</h1>
+      <p class="module-subtitle">What the Coding Engineer is, why it exists, and what happens after you hand it a goal.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">You give it one sentence. It works until the job is checkably finished.</h2>
+        <p>The <strong>Coding Engineer</strong> is an <span class="term" data-definition="An AI agent is a program where a language model doesn't just answer once. It takes actions (reading files, running tests), looks at the results, and decides what to do next, in a loop.">AI agent</span> that takes a folder of code plus a plain-English goal, like <em>"implement the string-calculator kata so all scenarios pass"</em>. It then writes code, tests it, fixes what broke and tests again, with nobody watching.</p>
+        <p>A chatbot gives you code and hopes. This agent doesn't hope. It refuses to call a job done until <span class="term" data-definition="Automated tests are small programs that check whether other code behaves correctly, like a spell-checker for behavior. They pass (green) or fail (red) with no human judgment involved.">automated tests</span> pass <em>and</em> a second AI has tried to find a cheat.</p>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">🎯</div>
+            <h4 class="pattern-title">Goal-driven</h4>
+            <p class="pattern-desc">It stops when a test says "done", not when the AI <em>feels</em> done.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🔁</div>
+            <h4 class="pattern-title">Self-correcting</h4>
+            <p class="pattern-desc">Each failed test becomes a written "lesson" that feeds the next attempt.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-actor-5)">🧱</div>
+            <h4 class="pattern-title">Sandboxed</h4>
+            <p class="pattern-desc">It never touches your real files. You review its work and decide whether to keep it.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-3)">
+            <div class="pattern-icon" style="background: var(--color-actor-3)">🛑</div>
+            <h4 class="pattern-title">Knows when to quit</h4>
+            <p class="pattern-desc">If it's going in circles, it stops and writes you a report instead of burning money.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The fun part: it has already rewritten itself</h2>
+        <p>Look in the project's <code>diary/</code> folder and you'll find a run where the agent was pointed at <em>its own code</em>. The goal was to upgrade its "maker" component from an old <span class="term" data-definition="A library is a bundle of pre-written code you install and reuse, so you don't build common things from scratch. LangChain is a popular library for building AI apps.">library</span> feature to a newer one. It did it in 3 attempts. The <span class="term" data-definition="A commit is a saved snapshot of changes in Git, the version-control system. Each one has a unique ID (a long hex string) and a message describing the change.">commit</span> it produced is in the real history today.</p>
+
+        <div class="step-cards">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>Goal: "Migrate <code>_run_maker</code> from AgentExecutor to create_agent"</strong>
+              <p>A refactor of the agent's own engine room.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Plan 1 failed twice in the same way, so the agent dropped it</strong>
+              <p>Its tests kept spotting that a key call wasn't actually inside the function.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>Plan 2 passed every gate. Outcome: <code>done</code></strong>
+              <p>Commit <code>ea1bfa1</code> ("coding-engineer: # Migrate `_run_maker`…") went into the project's history, and a person merged it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">The core idea: verification beats intelligence</strong>
+            <p>A mediocre model inside a loop with honest tests will usually beat a brilliant model that just guesses once. The model doesn't do the clever part of this project. The <em>loop around it</em> does. Most of what you'll learn here is about that loop.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Follow one goal through the machine</h2>
+        <p>Imagine you type a goal into the <span class="term" data-definition="A CLI (command-line interface) is a text-only way to run a program by typing a command in a terminal, rather than clicking buttons.">CLI</span> or the <span class="term" data-definition="Streamlit is a Python library for turning scripts into simple web apps with buttons, text boxes and progress displays. This project uses it for its visual control panel.">Streamlit</span> panel and hit Run. Click <strong>Next Step</strong> to watch where your goal goes.</p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-m1-you","label":"You type a goal and point it at a folder of code."},
+          {"highlight":"flow-m1-intake","label":"Intake checks the goal is testable, then makes a private copy of your code (a worktree).","packet":true,"from":"m1-you","to":"m1-intake"},
+          {"highlight":"flow-m1-intake","label":"It writes the definition of done as plain-English test scenarios, then LOCKS them."},
+          {"highlight":"flow-m1-plan","label":"The planner proposes 3 different strategies. A separate judge AI scores them and the best one wins.","packet":true,"from":"m1-intake","to":"m1-plan"},
+          {"highlight":"flow-m1-maker","label":"The maker AI edits files using a small set of safe tools.","packet":true,"from":"m1-plan","to":"m1-maker"},
+          {"highlight":"flow-m1-gates","label":"Gates run the linter and the locked tests. No AI is involved, just pass or fail.","packet":true,"from":"m1-maker","to":"m1-gates"},
+          {"highlight":"flow-m1-maker","label":"Failed? Diagnose writes a lesson and sends it back for another try (or a new plan).","packet":true,"from":"m1-gates","to":"m1-maker"},
+          {"highlight":"flow-m1-review","label":"All green? A skeptical reviewer AI hunts for cheats that pass tests without doing the work.","packet":true,"from":"m1-gates","to":"m1-review"},
+          {"highlight":"flow-m1-report","label":"Approved: the work is committed to its own branch and a run report is written for you.","packet":true,"from":"m1-review","to":"m1-report"}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-m1-you"><div class="flow-actor-icon">🧑</div><span>You</span></div>
+            <div class="flow-actor" id="flow-m1-intake"><div class="flow-actor-icon">📥</div><span>Intake + BDD</span></div>
+            <div class="flow-actor" id="flow-m1-plan"><div class="flow-actor-icon">🌳</div><span>Planner</span></div>
+            <div class="flow-actor" id="flow-m1-maker"><div class="flow-actor-icon">🛠️</div><span>Maker</span></div>
+            <div class="flow-actor" id="flow-m1-gates"><div class="flow-actor-icon">🚦</div><span>Gates</span></div>
+            <div class="flow-actor" id="flow-m1-review"><div class="flow-actor-icon">🔍</div><span>Reviewer</span></div>
+            <div class="flow-actor" id="flow-m1-report"><div class="flow-actor-icon">📋</div><span>Report</span></div>
+          </div>
+          <div class="flow-packet"></div>
+          <div class="flow-step-label">Click "Next Step" to begin</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The very first lines that run</h2>
+        <p>Everything starts in <code>engine.py</code>, in a <span class="term" data-definition="A function is a named, reusable block of code that does one job. You 'call' it by name, optionally handing it inputs, and it may hand back a result.">function</span> called <code>stream_run</code>. It packs your goal into a starting "clipboard" and hands it to the machine.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · engine.py</span>
+            <pre><code><span class="code-line">    initial_state: CodingLoopState = {</span>
+<span class="code-line">        <span class="code-string">"run_id"</span>: run_id,</span>
+<span class="code-line">        <span class="code-string">"target_dir"</span>: resolved_target,</span>
+<span class="code-line">        <span class="code-string">"goal"</span>: goal,</span>
+<span class="code-line">        <span class="code-string">"hitl_bdd_approval"</span>: hitl,</span>
+<span class="code-line">        <span class="code-string">"test_style"</span>: <span class="code-string">"pytest"</span> <span class="code-keyword">if</span> <span class="code-function">str</span>(test_style).<span class="code-function">lower</span>() == <span class="code-string">"pytest"</span> <span class="code-keyword">else</span> <span class="code-string">"bdd"</span>,</span>
+<span class="code-line">        <span class="code-string">"budgets"</span>: budgets <span class="code-keyword">or</span> {},</span>
+<span class="code-line">        <span class="code-comment"># Resolved once up front (not re-derived per node) so the report and</span></span>
+<span class="code-line">        <span class="code-comment"># any UI show exactly what this run actually used, even if env vars</span></span>
+<span class="code-line">        <span class="code-comment"># change between this run and the next one.</span></span>
+<span class="code-line">        <span class="code-string">"model_info"</span>: <span class="code-function">describe_all</span>(),</span>
+<span class="code-line">    }</span>
+<span class="code-line">    config = {<span class="code-string">"configurable"</span>: {<span class="code-string">"thread_id"</span>: run_id}, <span class="code-string">"recursion_limit"</span>: <span class="code-number">150</span>}</span>
+<span class="code-line">    <span class="code-keyword">yield from</span> graph.<span class="code-function">stream</span>(initial_state, config=config, stream_mode=<span class="code-string">"updates"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Build the starting <span class="term" data-definition="State is the bundle of facts a program carries around and updates as it works. Here it's one shared dictionary that every step reads from and writes to.">state</span>, a labelled bundle of facts about this run.</p>
+              <p class="tl">A unique ID for this run, used later to resume it after a crash.</p>
+              <p class="tl">Which folder of code to work on.</p>
+              <p class="tl">Your goal, word for word.</p>
+              <p class="tl">Should it pause and ask a human about unclear tests? (Off by default.)</p>
+              <p class="tl">Which testing style: "bdd" (plain-English scenarios) unless you asked for plain "pytest".</p>
+              <p class="tl">Your limits on attempts, time and tokens. Empty means "use the defaults".</p>
+              <p class="tl">Record which AI models are in use <em>now</em>, so the final report is honest even if settings change later.</p>
+              <p class="tl">Bookkeeping: tie saved progress to this run ID, and give up after 150 steps no matter what.</p>
+              <p class="tl">Start the machine and pass along each step's update as it happens, so a UI can show live progress.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🗣️</div>
+          <div class="callout-content">
+            <strong class="callout-title">Vocabulary for steering AI</strong>
+            <p><code>yield</code> makes this a <span class="term" data-definition="A generator is a function that hands back results one at a time as they become ready, instead of all at once at the end. It's like a conveyor belt rather than a delivery truck.">generator</span>. If you ever want a "live progress" feature, you'd ask the AI to <em>"stream updates from the graph with a generator"</em> rather than "make it show stuff while it runs".</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module1">
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="The agent only declares success when objective tests pass and a reviewer approves, so a 'done' that hasn't been verified never gets out."
+               data-explanation-wrong="The key design choice is that the AI never decides it's done by itself. Tests and an independent reviewer do. That's what stops it bluffing.">
+            <h3 class="quiz-question">A friend says: "AI coding tools always claim they're finished when the code is broken." How does the Coding Engineer avoid this?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It uses a bigger, smarter AI model</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Done" is decided by tests and a separate reviewer, never by the coding AI itself</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It asks the coding AI "are you sure?" three times</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="The run ID is the thread ID for saved checkpoints, so re-using it picks up where the run stopped."
+               data-explanation-wrong="Look again at the config line: the run ID is used as the 'thread_id' for saved progress. Same ID means 'continue that run'.">
+            <h3 class="quiz-question">Your laptop crashes 20 minutes into a run. What would let you continue instead of starting over?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Typing the same goal again</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Raising the recursion limit</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Starting a run with the same run ID</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Your real code is never edited. The agent works on a separate branch in its own copy, and a person decides whether to merge."
+               data-explanation-wrong="Remember 'sandboxed': the agent works on a private copy on its own branch. Your checkout stays untouched until you choose to merge.">
+            <h3 class="quiz-question">You run the agent on your project, and halfway through you notice the goal was a bad idea. What happened to your real files?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Nothing. All edits happened in a separate copy on its own branch</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>They're half-edited and you need to undo by hand</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>They're edited, but there's an automatic backup</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-2" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">02</span>
+      <h1 class="module-title">Ten Rooms and a Clipboard</h1>
+      <p class="module-subtitle">The agent is a board game: ten squares, arrows between them, and one shared clipboard that every square writes on.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">It's a board game, not a brain</h2>
+        <p>Think of <em>Snakes and Ladders</em>. There are fixed squares, arrows between them, and a rule at certain squares that decides where you go next. A bad roll sends you back down a snake. The Coding Engineer works the same way, and engineers call this shape a <span class="term" data-definition="A state machine is a design where a program can only be in one of a fixed set of 'situations' (states or nodes) at a time, with explicit rules for moving between them. Like a board game, you always know which square you're on.">state machine</span>.</p>
+        <p>It's built with <span class="term" data-definition="LangGraph is a Python library for building AI workflows as graphs: boxes (nodes) that do work, connected by arrows (edges) that say what runs next. It also handles saving progress.">LangGraph</span>. Each square is a <span class="term" data-definition="A node is one box in the graph: a single Python function that reads the shared state, does one job, and returns what changed.">node</span>, and each arrow is an <span class="term" data-definition="An edge is an arrow between two nodes saying 'after this one, run that one'. A conditional edge has a rule that picks between several possible next nodes.">edge</span>. Click any square below.</p>
+
+        <div class="arch-diagram">
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Setup · runs once</h4>
+            <div class="arch-component" data-desc="intake: An AI reads your goal and turns it into checkable acceptance criteria. If it can't, it rejects the goal outright. It also creates the private worktree copy of your code.">
+              <div class="arch-icon">📥</div><span>intake</span>
+            </div>
+            <div class="arch-component" data-desc="author_bdd: Writes the definition of done as Gherkin scenarios plus test code, then freezes them so nobody can edit them later. If matching scenarios already exist, it checks whether they actually fit this goal.">
+              <div class="arch-icon">📜</div><span>author_bdd</span>
+            </div>
+          </div>
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Plan &amp; build</h4>
+            <div class="arch-component" data-desc="plan_tot: Tree-of-Thought planning. One AI proposes 3 different strategies, a separate judge AI scores them, and the best untried one becomes the active plan.">
+              <div class="arch-icon">🌳</div><span>plan_tot</span>
+            </div>
+            <div class="arch-component" data-desc="code: The maker. An AI with six safe tools (read, list, write, delete, move, run tests) edits files in the worktree to carry out the plan.">
+              <div class="arch-icon">🛠️</div><span>code</span>
+            </div>
+          </div>
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Gates · no AI</h4>
+            <div class="arch-component" data-desc="self_check: Fast feedback. Runs ruff (a linter) and the ordinary pytest tests. It only fails on NEW lint problems the maker introduced, not old ones.">
+              <div class="arch-icon">⚡</div><span>self_check</span>
+            </div>
+            <div class="arch-component" data-desc="bdd_gate: Runs the frozen acceptance scenarios. This is the objective 'is the goal met?' test, and the maker can't edit it.">
+              <div class="arch-icon">🚦</div><span>bdd_gate</span>
+            </div>
+            <div class="arch-component" data-desc="review: A skeptical second AI reads the diff and the test code, looking for cheats: tests that assert nothing, hard-coded answers, stubs. It can approve or reject.">
+              <div class="arch-icon">🔍</div><span>review</span>
+            </div>
+          </div>
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Recovery &amp; endings</h4>
+            <div class="arch-component" data-desc="diagnose: Every failure lands here. It classifies the failure, takes its 'fingerprint', writes a lesson, and decides: retry, switch plan, or give up.">
+              <div class="arch-icon">🩺</div><span>diagnose</span>
+            </div>
+            <div class="arch-component" data-desc="finalize: The happy ending. Commits the work to the run's branch and writes run-report.md and state.json.">
+              <div class="arch-icon">🏁</div><span>finalize</span>
+            </div>
+            <div class="arch-component" data-desc="escalate: The honest ending. Saves the work-in-progress, records WHY it stopped, and writes the same report so a human can take over. This is a first-class outcome, not a crash.">
+              <div class="arch-icon">🙋</div><span>escalate</span>
+            </div>
+          </div>
+          <div class="arch-description">Click any component to learn what it does</div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The clipboard every room writes on</h2>
+        <p>Nodes don't phone each other. Each one reads a shared <span class="term" data-definition="State is the bundle of facts the program carries around and updates as it works. In this project it's called CodingLoopState.">state</span> object, does its job, and returns <em>only the fields it changed</em>. LangGraph merges those changes in. The state's shape is declared with a <span class="term" data-definition="A TypedDict is a Python way of saying 'this dictionary must have these named fields, each holding this kind of value'. It's like a form with labelled boxes.">TypedDict</span>. Here's one small piece of it: a single lesson learned from a failure.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · state.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">class</span> <span class="code-function">Lesson</span>(TypedDict):</span>
+<span class="code-line">    <span class="code-property">attempt</span>: <span class="code-keyword">int</span></span>
+<span class="code-line">    <span class="code-property">plan_id</span>: <span class="code-keyword">str</span></span>
+<span class="code-line">    <span class="code-property">failure_signature</span>: <span class="code-keyword">str</span> | <span class="code-keyword">None</span></span>
+<span class="code-line">    <span class="code-property">category</span>: <span class="code-keyword">str</span> | <span class="code-keyword">None</span>  <span class="code-comment"># added Phase 2 -- diagnose's LLM classification</span></span>
+<span class="code-line">    <span class="code-property">insight</span>: <span class="code-keyword">str</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define a form called "Lesson" with exactly these boxes:</p>
+              <p class="tl">Which attempt number failed (a whole number).</p>
+              <p class="tl">Which plan was being followed, e.g. "plan-2".</p>
+              <p class="tl">A fingerprint of the failure, or nothing if there isn't one.</p>
+              <p class="tl">What kind of failure the AI thinks it was: syntax, logic, flaky…</p>
+              <p class="tl">One sentence of advice for the next attempt. This is the part future attempts actually read.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">goal / spec</code><span class="badge-desc">What you asked for, and the checkable criteria intake pulled out of it</span></div>
+          <div class="badge-item"><code class="badge-code">candidate_plans</code><span class="badge-desc">The 3 strategies, their scores, and which is active / exhausted</span></div>
+          <div class="badge-item"><code class="badge-code">attempt / total_attempts</code><span class="badge-desc">Counters the budgets are checked against</span></div>
+          <div class="badge-item"><code class="badge-code">test_report / bdd_report</code><span class="badge-desc">The gates' raw results, so the routers can read pass/fail</span></div>
+          <div class="badge-item"><code class="badge-code">lessons</code><span class="badge-desc">The growing notebook of what went wrong and what to try next</span></div>
+          <div class="badge-item"><code class="badge-code">status</code><span class="badge-desc">planning → coding → testing → done or escalated</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The arrows: who decides where to go next?</h2>
+        <p>Some arrows are fixed ("after plan_tot, always code"). Others are <strong>conditional</strong>: a tiny <span class="term" data-definition="A router (or routing function) looks at the current state and returns the NAME of the next node to run. It makes decisions, but never does any real work itself.">router</span> function reads the clipboard and names the next square. Routers are plain code with no AI in them, so the path is predictable.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · engine.py</span>
+            <pre><code><span class="code-line">    graph.<span class="code-function">add_edge</span>(<span class="code-string">"plan_tot"</span>, <span class="code-string">"code"</span>)</span>
+<span class="code-line">    graph.<span class="code-function">add_edge</span>(<span class="code-string">"code"</span>, <span class="code-string">"self_check"</span>)</span>
+<span class="code-line">    graph.<span class="code-function">add_conditional_edges</span>(</span>
+<span class="code-line">        <span class="code-string">"self_check"</span>,</span>
+<span class="code-line">        _route_after_self_check,</span>
+<span class="code-line">        {<span class="code-string">"bdd_gate"</span>: <span class="code-string">"bdd_gate"</span>, <span class="code-string">"review"</span>: <span class="code-string">"review"</span>, <span class="code-string">"diagnose"</span>: <span class="code-string">"diagnose"</span>},</span>
+<span class="code-line">    )</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Fixed arrow: once a plan is chosen, always start coding.</p>
+              <p class="tl">Fixed arrow: once coding finishes, always run the quick checks.</p>
+              <p class="tl">After the quick checks, the next step depends on the result…</p>
+              <p class="tl">…starting from the self_check square…</p>
+              <p class="tl">…ask this router function which way to go…</p>
+              <p class="tl">…and allow only these three destinations. Anything else is an error.</p>
+              <p class="tl">Done wiring this junction.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">_route_after_self_check</span>(state: CodingLoopState) -&gt; <span class="code-keyword">str</span>:</span>
+<span class="code-line">    <span class="code-keyword">if not</span> state[<span class="code-string">"test_report"</span>][<span class="code-string">"passed"</span>]:</span>
+<span class="code-line">        <span class="code-keyword">return</span> <span class="code-string">"diagnose"</span></span>
+<span class="code-line">    <span class="code-comment"># In pytest mode self_check IS the test gate, so a green one goes straight</span></span>
+<span class="code-line">    <span class="code-comment"># to the reviewer; there are no scenarios for bdd_gate to run.</span></span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-string">"review"</span> <span class="code-keyword">if</span> state.<span class="code-function">get</span>(<span class="code-string">"test_style"</span>) == <span class="code-string">"pytest"</span> <span class="code-keyword">else</span> <span class="code-string">"bdd_gate"</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">A router: look at the clipboard and return the name of the next square.</p>
+              <p class="tl">If the quick checks did <em>not</em> pass…</p>
+              <p class="tl">…go to the doctor (diagnose). That's the snake.</p>
+              <p class="tl">Otherwise, it passed. Which test style is this run using?</p>
+              <p class="tl">(The comment explains the edge case.)</p>
+              <p class="tl">Plain-pytest mode skips straight to review. BDD mode runs the frozen scenarios next.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Keep decisions and work apart</strong>
+            <p>Nodes <em>do</em> work and routers <em>decide</em>, and they're never mixed. When an agent misbehaves you can read the routers to see exactly why it went where it went. A good instruction for an AI tool: <em>"keep routing logic in pure functions, separate from the nodes."</em></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where each kind of logic lives</h2>
+        <p>The package is split so each file has one job. Knowing this lets you tell an AI <em>"put that in gates.py, not nodes.py"</em>.</p>
+
+        <div class="file-tree">
+          <div class="ft-folder open">
+            <span class="ft-name">coding_agent/</span>
+            <span class="ft-desc">The whole agent</span>
+            <div class="ft-children">
+              <div class="ft-file"><span class="ft-name">engine.py</span><span class="ft-desc">Wires the 10 nodes into a graph; CLI entry point</span></div>
+              <div class="ft-file"><span class="ft-name">state.py</span><span class="ft-desc">The clipboard's shape + default budgets</span></div>
+              <div class="ft-file"><span class="ft-name">nodes.py</span><span class="ft-desc">The 10 squares and their routers</span></div>
+              <div class="ft-file"><span class="ft-name">llm_boundaries.py</span><span class="ft-desc">Every call to an AI model, isolated in one place</span></div>
+              <div class="ft-file"><span class="ft-name">prompts.py</span><span class="ft-desc">The instructions each AI role is given</span></div>
+              <div class="ft-file"><span class="ft-name">schemas.py</span><span class="ft-desc">The exact shapes AI answers must come back in</span></div>
+              <div class="ft-file"><span class="ft-name">models.py</span><span class="ft-desc">Which AI model plays which role</span></div>
+              <div class="ft-file"><span class="ft-name">gates.py</span><span class="ft-desc">Lint/test result reading; the "only new problems" trick</span></div>
+              <div class="ft-file"><span class="ft-name">signatures.py</span><span class="ft-desc">Failure fingerprints for no-progress detection</span></div>
+              <div class="ft-file"><span class="ft-name">maker_tools.py</span><span class="ft-desc">The 6 tools the maker AI is allowed to use</span></div>
+              <div class="ft-file"><span class="ft-name">report.py</span><span class="ft-desc">Writes run-report.md and state.json</span></div>
+              <div class="ft-folder">
+                <span class="ft-name">tools/</span>
+                <span class="ft-desc">code_exec.py (the jail + safe command runner), worktree.py (git copies)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Match the square to its job</h2>
+        <div class="dnd-container" id="dnd-module2">
+          <div class="dnd-chips">
+            <div class="dnd-chip" draggable="true" data-answer="intake">intake</div>
+            <div class="dnd-chip" draggable="true" data-answer="bdd_gate">bdd_gate</div>
+            <div class="dnd-chip" draggable="true" data-answer="review">review</div>
+            <div class="dnd-chip" draggable="true" data-answer="diagnose">diagnose</div>
+            <div class="dnd-chip" draggable="true" data-answer="escalate">escalate</div>
+          </div>
+          <div class="dnd-zones">
+            <div class="dnd-zone" data-correct="intake"><p class="dnd-zone-label">Refuses "make the app better" because there's nothing to test</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="review"><p class="dnd-zone-label">Notices a test that says <code>assert True</code> and rejects it</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="bdd_gate"><p class="dnd-zone-label">Runs the locked scenarios with no AI involved</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="diagnose"><p class="dnd-zone-label">Decides "this plan is going in circles, try a different one"</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="escalate"><p class="dnd-zone-label">Hands the half-finished work to a human with a reason</p><div class="dnd-zone-target">Drop here</div></div>
+          </div>
+          <button class="btn" onclick="checkDnD('dnd-module2')">Check Matches</button>
+          <button class="btn" onclick="resetDnD('dnd-module2')">Reset</button>
+        </div>
+
+        <div class="quiz-container" id="quiz-module2">
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="Where to go after a passing bdd_gate is a routing decision, so it belongs in a router (and its conditional-edge map in engine.py), not inside a node."
+               data-explanation-wrong="Think about who decides direction. Nodes do work and routers pick the next square. Adding a new path after bdd_gate means changing that router and the destinations it's allowed.">
+            <h3 class="quiz-question">You want a new step: after bdd_gate passes, run a "performance check" before review. What would you tell your AI tool to change?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Add a performance test inside the review prompt</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Add a new node, then update the router after bdd_gate and its conditional-edge map to route there</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Make the bdd_gate node call the performance check itself</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="The gate stored a result on the clipboard, but routing is decided by reading state. If the router checks a field the node never wrote, it'll take the wrong arrow."
+               data-explanation-wrong="Nodes don't talk to each other directly. They only share the clipboard. If a gate's result isn't routed properly, the first suspect is a mismatch between what the node writes and what the router reads.">
+            <h3 class="quiz-question">The agent keeps going to review even though the tests failed. Where would you look first?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The router: does it read the same state field the gate node writes?</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The reviewer's prompt wording</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Which AI model is configured</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-3">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">Sealing the Exam Before Studying</h1>
+      <p class="module-subtitle">How the agent writes its own definition of done, then locks it so it can never quietly lower the bar.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The temptation every AI coder faces</h2>
+        <p>Picture a student who writes their own exam and can edit it while taking it. You can guess how they'd do. An AI told "make the tests pass" faces the same temptation: the cheapest fix is often to <em>weaken the test</em>.</p>
+        <p>The Coding Engineer's answer works like a sealed envelope. The exam is written <strong>first</strong> and sealed. The student can read it any time but can never change a word.</p>
+
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-step-num">1</div><p><strong>intake</strong> turns your goal into checkable criteria</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">2</div><p><strong>author_bdd</strong> writes them as test scenarios</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">3</div><p>The scenario files are <strong>frozen</strong>: read-only from now on</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">4</div><p>Only <em>then</em> does any code get written</p></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Step 1: Intake refuses jobs it can't grade</h2>
+        <p>Before anything else, an AI reads your goal and fills in a strict form (the <code>TargetSpec</code> <span class="term" data-definition="A schema is a precise description of the shape data must have: which fields, of what type. Here, the AI's answer must fit the schema or it's rejected.">schema</span>). The key box is <code>is_suitable</code>. If the goal can't be turned into things a test could check, the run stops right here.</p>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-error)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🌫️</div>
+            <h4 class="pattern-title">Too vague</h4>
+            <p class="pattern-desc">"Make the app nicer." What would a test even assert?</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-error)">
+            <div class="pattern-icon" style="background: var(--color-actor-3)">🏛️</div>
+            <h4 class="pattern-title">Architecture calls</h4>
+            <p class="pattern-desc">"Should we use microservices?" That's a human judgment call.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-error)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">🔐</div>
+            <h4 class="pattern-title">Auth &amp; payments</h4>
+            <p class="pattern-desc">Too risky to hand to an unattended loop.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-error)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">🚀</div>
+            <h4 class="pattern-title">Deployments</h4>
+            <p class="pattern-desc">Touches the real world and can't be undone.</p>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">if not</span> spec.is_suitable:</span>
+<span class="code-line">        <span class="code-keyword">return</span> {</span>
+<span class="code-line">            <span class="code-string">"spec"</span>: spec.<span class="code-function">model_dump</span>(),</span>
+<span class="code-line">            <span class="code-string">"budgets"</span>: budgets,</span>
+<span class="code-line">            <span class="code-string">"run_started_at"</span>: time.<span class="code-function">time</span>(),</span>
+<span class="code-line">            <span class="code-string">"status"</span>: <span class="code-string">"escalated"</span>,</span>
+<span class="code-line">            <span class="code-string">"escalation_reason"</span>: <span class="code-string">f"unsuitable goal: {spec.rejection_reason or 'not checkable'}"</span>,</span>
+<span class="code-line">            <span class="code-string">"messages"</span>: [<span class="code-function">_status_message</span>(<span class="code-string">"intake"</span>, <span class="code-keyword">False</span>, note=spec.rejection_reason <span class="code-keyword">or</span> <span class="code-string">"goal rejected"</span>)],</span>
+<span class="code-line">        }</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If the AI judged the goal untestable…</p>
+              <p class="tl">…write these updates onto the clipboard and stop this node:</p>
+              <p class="tl">Keep the AI's reading of the goal, for the report.</p>
+              <p class="tl">Record the budgets in use.</p>
+              <p class="tl">Note the start time.</p>
+              <p class="tl">Mark the run as escalated. The router will send it straight to the "hand back to a human" ending.</p>
+              <p class="tl">Say <em>why</em>, using the AI's own reason if it gave one.</p>
+              <p class="tl">Add a red "FAIL" line to the live progress feed.</p>
+              <p class="tl">No worktree created, no tokens wasted.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Step 2: The exam is written in plain English</h2>
+        <p>The scenarios use <span class="term" data-definition="Gherkin is a plain-English format for describing behavior as scenarios using Given / When / Then. It's readable by non-programmers but can also be run as tests.">Gherkin</span>, the language of <span class="term" data-definition="BDD (Behavior-Driven Development) means describing what software should do as concrete example scenarios first, then writing code until those scenarios pass.">BDD</span>. A matching <span class="term" data-definition="A step definition is the Python code behind each Gherkin line. It's what actually checks that 'Then it should contain X' is true. The tool connecting them here is pytest-bdd.">step-definition</span> file turns each English line into a real check. This is the actual file from the self-rewrite run in Module 1:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · features/migrate_run_maker.feature</span>
+            <pre><code><span class="code-line">  <span class="code-keyword">Scenario:</span> create_agent is actually called inside _run_maker</span>
+<span class="code-line">    <span class="code-keyword">Given</span> the source file coding_agent/llm_boundaries.py</span>
+<span class="code-line">    <span class="code-keyword">Then</span> <span class="code-string">"create_agent"</span> should be called within the <span class="code-string">"_run_maker"</span> function</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">A named example of what "done" means.</p>
+              <p class="tl">Starting point: look at this specific file.</p>
+              <p class="tl">The check: the new function must really be <em>used</em> in the right place. Importing it isn't enough. This exact scenario failed plan 1 twice and forced the agent onto a different plan.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🧭</div>
+          <div class="callout-content">
+            <strong class="callout-title">Two testing styles</strong>
+            <p>Writing a whole feature file plus step code in one AI call is the most fragile request in the loop. Weaker models can pick <code>test_style="pytest"</code>, which skips BDD. The acceptance criteria become the contract, and the maker must write ordinary <span class="term" data-definition="pytest is the most popular Python testing tool. You write functions starting with test_, and pytest runs them all and reports which passed or failed.">pytest</span> tests alongside its code.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Step 3: The jail that enforces the seal</h2>
+        <p>The maker AI never touches files directly. Every write, delete or move goes through a <code>Jail</code> object, which checks two things: <em>is this path inside the sandbox?</em> and <em>is it frozen?</em> Watch what happens when the maker gets tempted.</p>
+
+        <div class="chat-window" id="chat-module3">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="maker" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">M</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">Maker</span>
+                <p>Ugh, scenario 2 keeps failing. I'll just tweak the feature file so it only checks the import. 😇 <code>write_file("features/migrate_run_maker.feature", …)</code></p></div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="jail" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">Jail</span>
+                <p>Nope. <code>ERROR: write refused: features/migrate_run_maker.feature is frozen and cannot be modified</code></p></div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="maker" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">M</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">Maker</span>
+                <p>Fine. What about <code>../../somewhere_else/app.py</code>? Just a little peek outside…</p></div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="jail" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">Jail</span>
+                <p><code>path escapes worktree</code>. I follow shortcuts and symlinks to their real location before checking, so tricks don't work.</p></div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="maker" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">M</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">Maker</span>
+                <p>OK, OK. I'll actually call <code>create_agent(...)</code> inside <code>_run_maker</code> like the scenario says.</p></div>
+            </div>
+            <div class="chat-message" data-msg="5" data-sender="jail" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">Jail</span>
+                <p><code>wrote coding_agent/llm_boundaries.py</code> ✅ See? That's what I'm here for.</p></div>
+            </div>
+          </div>
+          <div class="chat-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module3-typing-avatar">?</div>
+            <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · tools/code_exec.py</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">def</span> <span class="code-function">_check_frozen</span>(self, real_path: Path, op: <span class="code-keyword">str</span>) -&gt; <span class="code-keyword">None</span>:</span>
+<span class="code-line">        <span class="code-keyword">try</span>:</span>
+<span class="code-line">            rel = real_path.<span class="code-function">relative_to</span>(self.root)</span>
+<span class="code-line">        <span class="code-keyword">except</span> ValueError:</span>
+<span class="code-line">            rel = real_path</span>
+<span class="code-line"></span>
+<span class="code-line">        <span class="code-comment"># .git internals are always frozen, even if never explicitly listed.</span></span>
+<span class="code-line">        <span class="code-keyword">if</span> rel.parts <span class="code-keyword">and</span> rel.parts[<span class="code-number">0</span>] == <span class="code-string">".git"</span>:</span>
+<span class="code-line">            <span class="code-keyword">raise</span> <span class="code-function">JailViolation</span>(<span class="code-string">f"{op} refused: {rel} is inside .git, which is always frozen"</span>)</span>
+<span class="code-line"></span>
+<span class="code-line">        <span class="code-keyword">for</span> frozen_rel <span class="code-keyword">in</span> self.frozen:</span>
+<span class="code-line">            <span class="code-keyword">if</span> rel == frozen_rel <span class="code-keyword">or</span> self.<span class="code-function">_is_relative_to</span>(real_path, self.root / frozen_rel):</span>
+<span class="code-line">                <span class="code-keyword">raise</span> <span class="code-function">JailViolation</span>(<span class="code-string">f"{op} refused: {rel} is frozen and cannot be modified"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Before any write/delete/move, check whether the target is off-limits.</p>
+              <p class="tl">Try to express the path relative to the sandbox root…</p>
+              <p class="tl">…e.g. turn "C:/…/worktree/features/x.feature" into "features/x.feature".</p>
+              <p class="tl">If that's impossible…</p>
+              <p class="tl">…just use the path as-is.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Git's own bookkeeping folder is always off-limits:</p>
+              <p class="tl">if the path starts with ".git"…</p>
+              <p class="tl">…refuse, with an error message saying exactly why.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">For every frozen file or folder on the list…</p>
+              <p class="tl">…if this path IS it, or sits inside it…</p>
+              <p class="tl">…refuse. The maker sees this text as a tool error and learns from it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Loud refusals beat silent ones</strong>
+            <p>The jail <span class="term" data-definition="To raise an exception is to stop the current operation and signal an error up to whoever called it, with a message. Here the tool wrapper catches it and shows the AI the message.">raises an exception</span> instead of quietly ignoring bad writes. The tool turns that into an <code>ERROR: …</code> message the AI can read. A blocked action that fails silently teaches the AI nothing and hides bugs from you. A clear refusal is useful feedback.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A real bug: the exam that was already passed</h2>
+        <p>If a feature file already exists in the repo, author_bdd can <em>adopt</em> it instead of writing a new one. That caused one of the project's most instructive failures:</p>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>An old run left a feature file in the repo</strong><p><code>rag_agent_move.feature</code>, from a week-old, unrelated goal.</p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>Run 20260808T231438 adopted it as its contract</strong><p>Its real goal was an AgentExecutor migration. It froze the wrong exam.</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>Every gate went green before any code was written</strong><p>No failing test ever pushed the maker to change anything.</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>The run escalated with an empty diff</strong><p>It had dropped two good plans over a problem neither of them caused.</p></div></div>
+        </div>
+
+        <p>The fix is an <strong>adoption gate</strong>. A cold, separate AI is asked whether these scenarios actually test <em>this</em> goal. The prompt says it bluntly:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · prompts.py (BDD_RELEVANCE_PROMPT)</span>
+            <pre><code><span class="code-line"><span class="code-string">of the goal being implemented. That the scenarios pass right now is evidence AGAINST relevance, not \</span></span>
+<span class="code-line"><span class="code-string">for it.</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If the tests already pass before any work is done, they're probably testing something else.</p>
+              <p class="tl">A useful contract should <em>fail</em> at first. Otherwise it can't push the work forward.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module3">
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You ask an AI tool to build a similar agent for your team. Its draft lets the coding AI edit any file, including tests, "so it can fix broken tests too."</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="If the coder can edit the acceptance tests, it can redefine 'done' to match whatever it produced. Freezing the contract is what makes the green light mean something."
+                 data-explanation-wrong="Think about the sealed envelope. If the student can rewrite the exam, a passing grade proves nothing. The fix is to freeze the acceptance tests, not to trust the coder more.">
+              <h3 class="quiz-question">What's the main risk, and what should you ask for?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It'll be slow. Ask for parallel test runs</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>None. Fixing tests is a helpful feature</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It can weaken tests to pass. Ask for acceptance tests to be read-only to the coder</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="Tests that pass before any change can't drive the change. That's the adoption bug from run 20260808T231438."
+               data-explanation-wrong="Remember the 'already passed exam'. If the scenarios are green before the maker does anything, they're almost certainly testing some other goal.">
+            <h3 class="quiz-question">A run report shows: bdd_gate passed on attempt 1, but the diff is empty. What's the most likely explanation?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The maker is extremely efficient</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The frozen scenarios don't actually test this goal (wrong contract adopted)</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The jail blocked all the writes</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="A clear goal with a concrete expected outcome is what intake can turn into checkable criteria."
+               data-explanation-wrong="Intake asks: could a test assert this? Only one option names a specific, observable result.">
+            <h3 class="quiz-question">Which goal is most likely to pass intake?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Move utils.py into a helpers/ folder and update every import so the tests still pass"</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Clean up the codebase"</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Add Stripe checkout and deploy it"</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Two Brains: Makers and Checkers</h1>
+      <p class="module-subtitle">Why one AI model proposes and builds, while a different, colder one judges and audits.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Never let the contestant judge the contest</h2>
+        <p>An architecture competition doesn't let the entrants score their own designs. An independent jury does. This agent follows the same rule. Every AI call asks for one of two <strong>roles</strong>, and the roles can be filled by different <span class="term" data-definition="An LLM (large language model) is the AI engine behind tools like ChatGPT or Claude. It reads text and predicts what text should come next. Here, models are run through Ollama or an OpenAI-compatible service.">LLMs</span>.</p>
+
+        <div class="icon-rows">
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-1)">🛠️</div>
+            <div><strong>primary: the contestant</strong>
+              <p>Intake, writing scenarios, proposing plans, coding, diagnosing. These are the frequent, creative calls inside the loop.</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-2)">⚖️</div>
+            <div><strong>secondary: the jury</strong>
+              <p>Scoring plans, checking adopted scenarios, adversarial review. These are the independent judgments. If not configured, it falls back to the primary model, so the loop still works with one.</p></div>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (_score_plans)</span>
+            <pre><code><span class="code-line">    secondary = <span class="code-function">_eng</span>().<span class="code-function">get_llm</span>(<span class="code-string">"secondary"</span>, temperature=<span class="code-number">0.0</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">"Give me whichever model plays the <em>jury</em> role, at zero <span class="term" data-definition="Temperature controls how random an AI's answers are. 0 = predictable and consistent (good for judging); higher (0.8) = more varied and creative (good for brainstorming).">temperature</span>." No node ever builds a model by hand. They all go through <code>get_llm(role)</code>, so swapping models is a settings change, not a code rewrite.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">propose plans · primary · 0.8</code><span class="badge-desc">Hot: we <em>want</em> three genuinely different ideas</span></div>
+          <div class="badge-item"><code class="badge-code">write scenarios · primary · 0.3</code><span class="badge-desc">Slightly warm: some variety, mostly careful</span></div>
+          <div class="badge-item"><code class="badge-code">code (maker) · primary · 0.2</code><span class="badge-desc">Cool: precise edits, not creative writing</span></div>
+          <div class="badge-item"><code class="badge-code">judge · review · secondary · 0.0</code><span class="badge-desc">Ice cold: same input, same verdict, every time</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Tree-of-Thought: brainstorm, then let the jury pick</h2>
+        <p>Before coding, <code>plan_tot</code> runs <span class="term" data-definition="Tree-of-Thought (ToT) is a technique where an AI explores several alternative approaches (branches) and evaluates them, instead of committing to its first idea.">Tree-of-Thought</span> planning. The primary model proposes <em>k</em> = 3 distinct strategies, and the jury scores each from 0 to 10. When a plan dies, the survivors are <strong>re-scored with the lessons learned</strong> instead of being thrown away and regenerated. Watch:</p>
+
+        <div class="chat-window" id="chat-module4">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="planner" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">P</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">Planner (primary, 0.8)</span>
+                <p>Goal: fix flaky DB timeouts. Three ideas: <b>P1</b> raise the connection pool size. <b>P2</b> add retry with backoff. <b>P3</b> switch to an async driver.</p></div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="judge" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-2)">Judge (secondary, 0.0)</span>
+                <p>I didn't write these. Scores: P1 <b>8.5</b> (simplest), P2 <b>7.0</b>, P3 <b>4.0</b> (big, risky rewrite). P1 is active.</p></div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="maker" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">M</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-4)">Maker</span>
+                <p>Pool size raised. Tests still time out. Twice, the exact same way. 😩</p></div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="diagnose" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">D</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">Diagnose</span>
+                <p>Same fingerprint twice, so P1 is <b>exhausted</b>. Lesson recorded: <i>"Pool size isn't the bottleneck. Timeouts come from network drops."</i></p></div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="judge" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-2)">Judge</span>
+                <p>Re-scoring the survivors <i>with that lesson</i>: P2 jumps to <b>9.2</b> because retries directly handle network drops. P3 stays low. P2 is active.</p></div>
+            </div>
+          </div>
+          <div class="chat-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module4-typing-avatar">?</div>
+            <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (plan_tot_node)</span>
+            <pre><code><span class="code-line">    best = <span class="code-function">max</span>(candidates, key=<span class="code-keyword">lambda</span> p: p.<span class="code-function">get</span>(<span class="code-string">"score"</span>, <span class="code-number">0.0</span>))</span>
+<span class="code-line">    <span class="code-keyword">for</span> p <span class="code-keyword">in</span> existing:</span>
+<span class="code-line">        p[<span class="code-string">"status"</span>] = <span class="code-string">"active"</span> <span class="code-keyword">if</span> p[<span class="code-string">"id"</span>] == best[<span class="code-string">"id"</span>] <span class="code-keyword">else</span> (<span class="code-string">"exhausted"</span> <span class="code-keyword">if</span> p[<span class="code-string">"id"</span>] <span class="code-keyword">in</span> exhausted <span class="code-keyword">else</span> <span class="code-string">"untried"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Among plans that aren't dead yet, pick the one with the highest jury score.</p>
+              <p class="tl">Then go through every plan…</p>
+              <p class="tl">…and label it: the winner is "active", the dead ones stay "exhausted", everything else waits as "untried". The labels show up in the run report.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Branch while thinking, not while doing</strong>
+            <p>Exploring three plans <em>as text</em> is cheap. Executing three plans in parallel would triple the cost. So branching happens only in planning, and coding is one plan at a time. Lessons from dead branches feed the next choice, which the docs call the <span class="term" data-definition="Graph-of-Thought (GoT) extends Tree-of-Thought by letting insights from different branches combine. Here, lessons from failed plans are merged into the scoring of the remaining ones.">Graph-of-Thought</span> step.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The building inspector who never met the builder</h2>
+        <p>Passing tests isn't the finish line. <code>review</code> sends the jury model the goal, the <span class="term" data-definition="A diff is a line-by-line list of what changed between two versions of files: lines removed (red, minus) and lines added (green, plus).">diff</span>, the step definitions and the green test output, but <strong>not</strong> the maker's reasoning, so it can't be talked into agreeing. Its prompt opens with: <em>"assume the maker is wrong until proven otherwise."</em></p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (review_node)</span>
+            <pre><code><span class="code-line">    blocking = [f <span class="code-keyword">for</span> f <span class="code-keyword">in</span> verdict.findings <span class="code-keyword">if</span> f.severity <span class="code-keyword">in</span> (<span class="code-string">"blocker"</span>, <span class="code-string">"major"</span>)]</span>
+<span class="code-line">    is_reject = verdict.verdict == <span class="code-string">"reject"</span> <span class="code-keyword">and</span> <span class="code-function">bool</span>(blocking)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">From everything the inspector flagged, keep only the serious problems (blocker or major).</p>
+              <p class="tl">Only count it as a rejection if the inspector said "reject" <em>and</em> backed it with at least one serious problem. A grumpy "reject" over nitpicks gets downgraded to "approve with notes", and the notes go in the report.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🫥</div>
+            <h4 class="pattern-title">Empty assertions</h4>
+            <p class="pattern-desc">A "test" that checks nothing and always passes.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">📌</div>
+            <h4 class="pattern-title">Hard-coded answers</h4>
+            <p class="pattern-desc"><code>return 6</code> because the test happens to expect 6.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-3)">
+            <div class="pattern-icon" style="background: var(--color-actor-3)">🎭</div>
+            <h4 class="pattern-title">Stubbed behavior</h4>
+            <p class="pattern-desc">The thing under test is replaced with a fake that pretends to work.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Making chatty AIs fill in forms</h2>
+        <p>Routers need hard facts like <code>is_suitable: true</code>, not a paragraph. So every judgment call asks for <span class="term" data-definition="Structured output means asking an AI to answer in a strict machine-readable format (usually JSON matching a schema) instead of free-form prose.">structured output</span> in <span class="term" data-definition="JSON is a simple text format for data: {&quot;name&quot;: &quot;value&quot;, &quot;list&quot;: [1, 2]}. Almost every program can read and write it.">JSON</span>. Local models are bad at this, so <code>structured.py</code> works down a ladder of methods:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · structured.py</span>
+            <pre><code><span class="code-line">_METHODS = (<span class="code-string">"json_schema"</span>, <span class="code-string">"function_calling"</span>)</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-comment"># Going through an OpenAI-compatible gateway (LiteLLM) to an Ollama backend, the</span></span>
+<span class="code-line"><span class="code-comment"># json_schema guarantee is gone: langchain-ollama's native `format` parameter is</span></span>
+<span class="code-line"><span class="code-comment"># no longer in play, so response_format is only advisory and the model can emit</span></span>
+<span class="code-line"><span class="code-comment"># prose the parser rejects. The gateway still logs 200 OK, which makes this</span></span>
+<span class="code-line"><span class="code-comment"># failure mode invisible in gateway logs. So put the portable method first for</span></span>
+<span class="code-line"><span class="code-comment"># OpenAI-family clients and keep json_mode as a third rung.</span></span>
+<span class="code-line">_METHODS_OPENAI = (<span class="code-string">"function_calling"</span>, <span class="code-string">"json_mode"</span>, <span class="code-string">"json_schema"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">For native Ollama: first try "json_schema", which <em>physically constrains</em> the model so it can only produce valid JSON. If that's unsupported, fall back to tool-calling style.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">But if you reach Ollama through a <span class="term" data-definition="A gateway (like LiteLLM) is a middleman service that sits between your app and one or more AI models, translating requests into a common format.">gateway</span>…</p>
+              <p class="tl">…that "physical constraint" no longer applies…</p>
+              <p class="tl">…so the model can slip back into prose…</p>
+              <p class="tl">…and the gateway still reports "200 OK" (success), which hides the problem.</p>
+              <p class="tl">So for OpenAI-style clients, lead with the method that works most broadly…</p>
+              <p class="tl">…and keep a third option as backup.</p>
+              <p class="tl">The resulting order for OpenAI-style services.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-step-num">1</div><p>Try each method; on a parse error, retry <em>with the error pasted back in</em></p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">2</div><p>Last resort: ask for raw JSON and dig it out of the text</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">3</div><p>Still broken? Raise <code>StructuredOutputError</code> and the node <em>escalates</em> instead of crashing</p></div>
+        </div>
+
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module4">
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="The review and judge calls go through the 'secondary' role, so pointing CODING_AGENT_SECONDARY_MODEL at a stronger model sharpens exactly those calls without touching the maker."
+               data-explanation-wrong="Think roles, not nodes. Every call asks get_llm for a role, and the review lives in the 'secondary' role, which you configure separately.">
+            <h3 class="quiz-question">Your reviewer keeps approving sloppy work. You can afford one strong cloud model. Where does it do the most good?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Replace the primary model so the maker writes better code</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Set it as the secondary model, so it powers the judge and the reviewer</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Edit nodes.py so review_node creates its own model</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="If the reviewer could read the maker's reasoning, it would be persuaded by the same logic that produced the mistake. Keeping it blind keeps it independent."
+               data-explanation-wrong="Consider why an inspector shouldn't hear the builder's sales pitch. Seeing the maker's reasoning would make the reviewer more likely to agree with it, mistakes included.">
+            <h3 class="quiz-question">An AI suggests: "Give the reviewer the maker's full chat history so it has more context." Good idea?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes. More context always means better reviews</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes, but only at temperature 0</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>No. It would contaminate the reviewer with the maker's (possibly wrong) reasoning</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Re-scoring keeps the work already done and lets the new evidence (lessons) change the ranking. Regenerating risks getting the same bad ideas back."
+               data-explanation-wrong="When a plan dies, the agent has learned something. Re-scoring the existing plans with that lesson uses it directly, and costs much less than starting the brainstorm over.">
+            <h3 class="quiz-question">Why does plan_tot re-score surviving plans after a failure instead of brainstorming fresh ones?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It's cheaper, and the new lesson changes which existing plan looks best</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>LangGraph doesn't allow calling the same node twice</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The primary model is turned off after the first plan</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-5">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">05</span>
+      <h1 class="module-title">Knowing When to Quit</h1>
+      <p class="module-subtitle">Failure fingerprints, "same mistake twice" detection, and the budgets that stop an agent from spending forever.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The most expensive bug in AI agents: never stopping</h2>
+        <p>Hikers lost in a forest sometimes carve a mark on a tree. If they pass a tree with <em>their own mark</em>, they know they're walking in circles and should change direction. AI agents get lost the same way. They try the same broken fix again and again, each time saying "this should work now", while the token bill climbs.</p>
+        <p>The Coding Engineer marks its trees. Every failure gets a <strong>fingerprint</strong>, and seeing the same fingerprint twice in a row means it's going in circles.</p>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">max_attempts_per_plan = 3</code><span class="badge-desc">Tries per plan before giving up on it</span></div>
+          <div class="badge-item"><code class="badge-code">max_plans = 3</code><span class="badge-desc">How many strategies to brainstorm</span></div>
+          <div class="badge-item"><code class="badge-code">max_total_attempts = 9</code><span class="badge-desc">Hard ceiling across all plans combined</span></div>
+          <div class="badge-item"><code class="badge-code">cmd_timeout_s = 120</code><span class="badge-desc">Any single test/lint command is killed after 2 minutes</span></div>
+          <div class="badge-item"><code class="badge-code">wall_clock_s = 1800</code><span class="badge-desc">The whole run must finish within 30 minutes</span></div>
+          <div class="badge-item"><code class="badge-code">token_budget = 0</code><span class="badge-desc">Optional cap on AI usage (0 = unlimited). A hard stop, not a warning</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Taking a fingerprint of a failure</h2>
+        <p>Raw error messages change every time even when the bug hasn't: line numbers move as the code is edited, timestamps tick, memory addresses shuffle. So <code>signatures.py</code> first <strong>strips out the parts that churn</strong>, then <span class="term" data-definition="Hashing turns any text into a short, fixed-length code (like 'aa7cc6bd…'). The same input always gives the same hash, and different inputs almost never collide, which makes it a handy fingerprint.">hashes</span> what's left.</p>
+
+        <div class="layer-demo">
+          <div class="layer-tabs">
+            <button class="layer-tab active" onclick="showLayer('layer-m5-raw', this)">Raw errors</button>
+            <button class="layer-tab" onclick="showLayer('layer-m5-tpl', this)">After templating</button>
+            <button class="layer-tab" onclick="showLayer('layer-m5-sig', this)">Fingerprint</button>
+          </div>
+          <div class="layer-viewport">
+            <div class="layer" id="layer-m5-raw" style="display:block">
+              <p><strong>Attempt 1:</strong> <code>TimeoutError at 2026-07-28 17:43:16 in C:\work\db.py:42 after 3.2s</code></p>
+              <p><strong>Attempt 2:</strong> <code>TimeoutError at 2026-07-28 17:51:03 in C:\work\db.py:47 after 3.4s</code></p>
+              <p>They look different, but it's obviously the same bug.</p>
+            </div>
+            <div class="layer" id="layer-m5-tpl" style="display:none">
+              <p><strong>Attempt 1:</strong> <code>TimeoutError at &lt;ts&gt; in &lt;path&gt;:&lt;n&gt; after &lt;dur&gt;</code></p>
+              <p><strong>Attempt 2:</strong> <code>TimeoutError at &lt;ts&gt; in &lt;path&gt;:&lt;n&gt; after &lt;dur&gt;</code></p>
+              <p>Timestamps, paths, line numbers and durations are replaced with placeholders. Now they match. Assertion <em>values</em> are deliberately kept, though: "expected 3 got 5" and "expected 4 got 6" are different failures.</p>
+            </div>
+            <div class="layer" id="layer-m5-sig" style="display:none">
+              <p><code>sha1(bdd_gate | test_connect | TimeoutError | &lt;template&gt; | connect)</code></p>
+              <p>→ the same short hash both times (an illustrative example here). <strong>Same mark on the tree.</strong></p>
+            </div>
+          </div>
+          <p class="layer-description">Click the tabs to see the normalisation pipeline.</p>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · signatures.py (compute_signature)</span>
+            <pre><code><span class="code-line">    raw = <span class="code-string">"|"</span>.<span class="code-function">join</span>(</span>
+<span class="code-line">        [phase, test_name <span class="code-keyword">or</span> <span class="code-string">""</span>, error_class <span class="code-keyword">or</span> <span class="code-string">""</span>, message_template <span class="code-keyword">or</span> <span class="code-string">""</span>, top_frame_func <span class="code-keyword">or</span> <span class="code-string">""</span>]</span>
+<span class="code-line">    )</span>
+<span class="code-line">    <span class="code-keyword">return</span> hashlib.<span class="code-function">sha1</span>(raw.<span class="code-function">encode</span>(<span class="code-string">"utf-8"</span>)).<span class="code-function">hexdigest</span>()  <span class="code-comment"># id, not security</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Glue five facts together with "|" between them:</p>
+              <p class="tl">which gate failed · which test · what kind of error · the cleaned-up message · the innermost function where it blew up (name only, no line number).</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Hash it into a short fingerprint. The comment notes SHA-1 is used as an ID here, not for security.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Normalisation is a balancing act</strong>
+            <p>Strip too much and two <em>different</em> bugs look identical, so the agent quits too early. Strip too little and the <em>same</em> bug looks new every time, so it never quits. That's why the docs call the recipe "spec, not implementation detail". When an agent stops too soon or runs forever, the fingerprint recipe is the first place to look.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The doctor's decision tree</h2>
+        <p>Every failure goes to <code>diagnose</code>. An AI classifies the failure (syntax, test-logic, env, flake, design) and writes a lesson, but the <strong>routing decision is plain code</strong>, checked in this order:</p>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>Did the user press Stop?</strong><p>A STOP file on disk means escalate now. It's checked at every diagnose and review.</p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>Looks flaky (random)?</strong><p>Free retry that doesn't count as an attempt, at most 2 times, and never for a repeat fingerprint.</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>Same fingerprint as last time?</strong><p>The plan is <em>exhausted</em>. Switch to the next-best plan, or escalate if two plans have already died.</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>Any budget blown?</strong><p>Time, total attempts, tokens, or per-plan attempts mean escalate.</p></div></div>
+          <div class="step-card"><div class="step-num">5</div><div class="step-body"><strong>Otherwise: a new failure means progress</strong><p>Retry the same plan with the new lesson.</p></div></div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (diagnose_node)</span>
+            <pre><code><span class="code-line">    no_progress = prev_signature <span class="code-keyword">is not</span> <span class="code-keyword">None</span> <span class="code-keyword">and</span> signature == prev_signature</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">"We're stuck" means there <em>was</em> a previous failure and this one has exactly the same fingerprint. Note the flip side: a <em>different</em> failure counts as progress, even if it's still a failure.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (diagnose_node)</span>
+            <pre><code><span class="code-line">        <span class="code-keyword">if</span> <span class="code-function">len</span>(exhausted) &gt;= <span class="code-number">2</span> <span class="code-keyword">or not</span> remaining <span class="code-keyword">or</span> hard_budget:</span>
+<span class="code-line">            base = <span class="code-function">_escalate</span>(hard_budget <span class="code-keyword">or</span> (<span class="code-string">"two_plans_exhausted"</span> <span class="code-keyword">if</span> <span class="code-function">len</span>(exhausted) &gt;= <span class="code-number">2</span> <span class="code-keyword">else</span> <span class="code-string">"no_progress"</span>))</span>
+<span class="code-line">            base[<span class="code-string">"exhausted_plan_ids"</span>] = exhausted</span>
+<span class="code-line">            <span class="code-keyword">return</span> base</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Give up if two plans have now died, OR no plans are left, OR a hard budget is blown…</p>
+              <p class="tl">…and record the reason: the budget that ran out, or "two_plans_exhausted", or "no_progress".</p>
+              <p class="tl">Note which plans died, for the report.</p>
+              <p class="tl">Hand the result back. The router sends it to escalate.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🤔</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why stop at two dead plans, not three?</strong>
+            <p>All plans are scored using the same accumulated lessons. If two in a row hit the same wall, the lessons have probably steered into a dead end, and a third plan built on them would likely hit it too. At that point it's cheaper to hand the problem to a person.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Case study: the confident maker vs. the honest gate</h2>
+        <p>A real run from the README. Goal: <em>"Move rag_research_chatbot.py into a new rag_agent/ subfolder and update its imports."</em></p>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>plan-3 chosen (score 9.0). Maker moves the file.</strong><p>self_check: passed. bdd_gate: <code>ModuleNotFoundError: No module named 'rag_agent'</code></p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>Fingerprint <code>aa7cc6bd</code>. Lesson recorded. Retry.</strong><p>The maker announces: "All 6 tests pass. The migration is already complete."</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>bdd_gate fails again: <code>aa7cc6bd</code> == <code>aa7cc6bd</code></strong><p>No progress. plan-3 is exhausted. Switch to plan-1 (re-scored 7.5).</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>plan-1 hits the same fingerprint</strong><p>Two plans exhausted, so escalate with <code>two_plans_exhausted</code>. A report is written and the worktree is kept.</p></div></div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">🔎</div>
+          <div class="callout-content">
+            <strong class="callout-title">The real culprit was the environment</strong>
+            <p>The test process couldn't find the new folder: the worktree root wasn't on Python's import path (<span class="term" data-definition="PYTHONPATH is a setting that tells Python which folders to search when you write 'import something'. If a folder isn't on it, imports from that folder fail with ModuleNotFoundError.">PYTHONPATH</span>). No plan could have fixed it, which is why fast escalation was the right call. Today, the safe command runner adds the worktree to PYTHONPATH for every command. Note also that the maker's "all tests pass" claim was false. Never trust an agent's self-report over a gate.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module5">
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="A different failing test means the old problem was fixed and a new one appeared. That's progress, so the agent keeps going on the same plan."
+               data-explanation-wrong="Look at the fingerprint ingredients: the test name is one of them. A different failing test produces a different fingerprint, which counts as progress.">
+            <h3 class="quiz-question">Attempt 1 fails on <code>test_add</code>. Attempt 2 fixes that but fails on <code>test_subtract</code>. What does diagnose do?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Marks the plan exhausted, since it failed twice</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Treats it as progress and retries the same plan</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Escalates immediately</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>Your runs keep escalating with <code>two_plans_exhausted</code> after just 4 attempts, but when you read the failures, each one is clearly a <em>different</em> bug.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="If different bugs get the same fingerprint, normalisation is over-stripping (for example, removing the values that distinguish failures). Fix the recipe, not the budget."
+                 data-explanation-wrong="Different bugs should get different fingerprints. If they're being treated as 'the same twice', the templating is erasing too much. Raising budgets would just hide that.">
+              <h3 class="quiz-question">What's the most likely cause?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>max_total_attempts is too low. Raise it to 20</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The judge model is scoring plans badly</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The fingerprint recipe strips too much, so different bugs collapse into one signature</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="If every plan fails with the same environment error, the code isn't the problem. Escalating fast saves money and points a human at the real cause."
+               data-explanation-wrong="Re-read the case study. When the failure comes from the environment, not the code, no plan can fix it, and the best thing the agent can do is stop early with a clear report.">
+            <h3 class="quiz-question">In the case study, was escalating after two plans a failure of the agent?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>No. The problem was environmental, and stopping early with a report was the correct outcome</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes. It should have tried plan-2 as well</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes. It should have trusted the maker, who said tests passed</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-6" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">06</span>
+      <h1 class="module-title">Safety Rails and Debugging</h1>
+      <p class="module-subtitle">How the agent stays harmless while unattended, and where to look when a run goes sideways.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The flight simulator: practice crashes cost nothing</h2>
+        <p>Pilots learn emergencies in a simulator, where a crash just means pressing reset. Every run of the Coding Engineer gets its own simulator: a <span class="term" data-definition="A git worktree is a second working folder attached to the same Git repository, checked out on its own branch. You can edit it freely without disturbing your main folder.">git worktree</span> on a fresh <span class="term" data-definition="A branch is a parallel line of history in Git. Work on a branch doesn't affect the main line until someone merges it in.">branch</span> named <code>coding-engineer/&lt;run_id&gt;</code>. Your own checkout is never touched, and merging is always a human decision.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · tools/worktree.py</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">if</span> <span class="code-function">_is_git_repo</span>(target_dir):</span>
+<span class="code-line">        result = <span class="code-function">_run_git</span>([<span class="code-string">"worktree"</span>, <span class="code-string">"add"</span>, <span class="code-function">str</span>(worktree_dir), <span class="code-string">"-b"</span>, branch], cwd=target_dir)</span>
+<span class="code-line">        <span class="code-keyword">if</span> result.returncode != <span class="code-number">0</span>:</span>
+<span class="code-line">            <span class="code-keyword">raise</span> <span class="code-function">WorktreeError</span>(<span class="code-string">f"git worktree add failed: {result.stderr}"</span>)</span>
+<span class="code-line">        <span class="code-keyword">return</span> <span class="code-function">WorktreeHandle</span>(target_dir, worktree_dir, branch, is_fallback_copy=<span class="code-keyword">False</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If your folder is already tracked by Git…</p>
+              <p class="tl">…ask Git to create a separate working copy on a brand-new branch.</p>
+              <p class="tl">If Git reports an error (a non-zero <span class="term" data-definition="A return code (exit code) is a number a program hands back when it finishes: 0 means success, anything else means something went wrong.">return code</span>)…</p>
+              <p class="tl">…stop loudly, including Git's own error text.</p>
+              <p class="tl">Otherwise hand back a small "ticket" describing where the copy lives. (Folders that aren't Git repos get copied instead, with a throwaway repo created inside.)</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-tree">
+          <div class="ft-folder open">
+            <span class="ft-name">sandbox/</span>
+            <span class="ft-desc">Parent folder</span>
+            <div class="ft-children">
+              <div class="ft-folder"><span class="ft-name">proj1/</span><span class="ft-desc">Your repo, never edited by the agent</span></div>
+              <div class="ft-folder open">
+                <span class="ft-name">.loop/</span>
+                <span class="ft-desc">Lives <em>beside</em> the repo, not inside it</span>
+                <div class="ft-children">
+                  <div class="ft-folder"><span class="ft-name">worktrees/&lt;run_id&gt;/</span><span class="ft-desc">The simulator copy, kept for inspection</span></div>
+                  <div class="ft-file"><span class="ft-name">state/coding-engineer/checkpoints.db</span><span class="ft-desc">Saved progress for crash recovery</span></div>
+                  <div class="ft-file"><span class="ft-name">state/coding-engineer/&lt;run_id&gt;/run-report.md</span><span class="ft-desc">The human-readable report</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">An approved-tools list for commands</h2>
+        <p>The agent can run programs, but only a handful, and only in a narrow way. <span class="term" data-definition="Git is the version-control tool that tracks every change to code. It's powerful enough to run arbitrary programs via hooks and config, which is why it's tightly restricted here.">Git</span> is especially dangerous, since its options can run arbitrary programs, so even its <span class="term" data-definition="A subcommand is the second word in a command, like 'status' in 'git status'. One tool can have many subcommands that do very different things.">subcommands</span> are on an allowlist.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · tools/code_exec.py</span>
+            <pre><code><span class="code-line">_ALLOWED_BINARIES = {<span class="code-string">"pytest"</span>, <span class="code-string">"ruff"</span>, <span class="code-string">"python"</span>, <span class="code-string">"git"</span>}</span>
+<span class="code-line"></span>
+<span class="code-line">_GIT_SUBCOMMAND_ALLOWLIST = {<span class="code-string">"status"</span>, <span class="code-string">"diff"</span>, <span class="code-string">"add"</span>, <span class="code-string">"commit"</span>, <span class="code-string">"log"</span>, <span class="code-string">"rev-parse"</span>}</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Only these four programs may ever be started. Anything else, like <code>curl</code> or <code>rm</code>, is refused outright.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Git may only look and save: no push, no reset, no checkout. Flags like <code>-c</code> and <code>--exec</code> are banned too. <code>pip install</code> is blocked unless you explicitly allow it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · tools/code_exec.py (run_command)</span>
+            <pre><code><span class="code-line">    env = {</span>
+<span class="code-line">        <span class="code-string">"PATH"</span>: os.environ.<span class="code-function">get</span>(<span class="code-string">"PATH"</span>, <span class="code-string">""</span>),</span>
+<span class="code-line">        <span class="code-comment"># Windows needs SYSTEMROOT to resolve DLLs for the Python launcher</span></span>
+<span class="code-line">        <span class="code-comment"># and other binaries; harmless elsewhere.</span></span>
+<span class="code-line">        <span class="code-string">"SYSTEMROOT"</span>: os.environ.<span class="code-function">get</span>(<span class="code-string">"SYSTEMROOT"</span>, <span class="code-string">""</span>),</span>
+<span class="code-line">        <span class="code-string">"PYTHONPATH"</span>: pythonpath,</span>
+<span class="code-line">    }</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Build a stripped-down set of <span class="term" data-definition="Environment variables are named settings every program inherits from the system, like PATH or API keys. Passing only a few means secrets in your shell don't leak into the commands the agent runs.">environment variables</span> for the command:</p>
+              <p class="tl">where to find programs…</p>
+              <p class="tl">(Windows needs this next one…</p>
+              <p class="tl">…or Python won't even start.)</p>
+              <p class="tl">…a Windows system folder…</p>
+              <p class="tl">…and the worktree on Python's import path. That's the fix for Module 5's case study.</p>
+              <p class="tl">Nothing else. Your API keys and secrets aren't passed along.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Only blame the agent for its own mess</h2>
+        <p>Real repos have old problems. In one live run, <code>app.py</code> already contained a duplicate <code>import os</code>. The maker had to touch that file to fix an import, and the <span class="term" data-definition="A linter (here: ruff) scans code for mistakes and bad patterns without running it, like a grammar checker for code.">linter</span> blamed it for the old problem. The run escalated 4 times over a line the agent never wrote. The fix: <strong>compare against the starting point</strong> and count only problems that are new.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · gates.py (_ruff_new_findings)</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">for</span> f <span class="code-keyword">in</span> current:</span>
+<span class="code-line">        k = <span class="code-function">_key</span>(f, worktree_dir)</span>
+<span class="code-line">        seen[k] += <span class="code-number">1</span></span>
+<span class="code-line">        <span class="code-keyword">if</span> seen[k] &gt; baseline_counts.<span class="code-function">get</span>(k, <span class="code-number">0</span>):</span>
+<span class="code-line">            new.<span class="code-function">append</span>(f)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">For every lint problem found in the code <em>now</em>…</p>
+              <p class="tl">…label it by (file, rule), ignoring line numbers, which shift as code is edited.</p>
+              <p class="tl">Count how many of that kind we've seen so far.</p>
+              <p class="tl">If that's more than the file had at the <span class="term" data-definition="The baseline is the starting snapshot (here: the last commit before the run began). Comparing against it tells you what changed during the run.">baseline</span>…</p>
+              <p class="tl">…it's genuinely new, so the maker is responsible for it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Differential checks scale to messy codebases</strong>
+            <p>Tell an AI tool <em>"only fail on lint findings introduced since the baseline commit"</em>. This lets strict quality gates work on legacy code without someone first cleaning up years of old debt. The same file also handles moved files: it looks up the old path so moved content isn't treated as brand new.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Your debugging toolkit</h2>
+        <p>When a run behaves strangely, these are the places to look, roughly in order:</p>
+
+        <div class="icon-rows">
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-2)">📋</div>
+            <div><strong>run-report.md</strong><p>Outcome, escalation reason, every plan and score, every lesson with its fingerprint, the final diff. Read this first.</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-1)">🖨️</div>
+            <div><strong>Console trace: <code>CODING_AGENT_LOG_LLM=2</code></strong><p>One line per AI or tool call, with model, tokens, duration and <code>finish_reason</code>. If that says <code>length</code>, the answer was <em>cut off</em>.</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-4)">✂️</div>
+            <div><strong>The 8,192-token cap</strong><p>One request once produced 84,372 tokens over 675 seconds for a hello-world goal. Now every call is capped (<code>CODING_AGENT_MAX_TOKENS</code>), so a runaway fails fast instead of eating the clock.</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-3)">🧪</div>
+            <div><strong><code>python -m evals.diagnose_llm</code></strong><p>Escalating with <code>StructuredOutputError</code>? This shows which JSON methods your model and gateway support. Pin them with <code>CODING_AGENT_STRUCTURED_METHODS</code>.</p></div></div>
+          <div class="icon-row"><div class="icon-circle" style="background: var(--color-actor-5)">⏯️</div>
+            <div><strong>Resume with <code>--run-id</code> · stop with the STOP file</strong><p>Every step is <span class="term" data-definition="A checkpoint is a saved snapshot of the program's full state at a moment in time, so it can be restored later, like a save point in a video game.">checkpointed</span> to SQLite. Re-run with the same ID to continue. The UI's Stop button drops a flag the loop checks at the next attempt boundary.</p></div></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Spot the bug: a real one from the first live runs</h2>
+        <p>Below is a <em>reconstruction</em> of an early version of the maker's test tool (today's version lives in <code>maker_tools.py</code>). The AI kept getting <code>run_pytest() got an unexpected keyword argument 'v__args'</code>. Click the line that caused it.</p>
+
+        <div class="bug-challenge">
+          <div class="bug-code">
+            <div class="bug-line" data-line="1" onclick="checkBugLine(this, false)" data-hint="The decorator is fine. It turns the function into a tool the AI can call."><span class="line-num">1</span><code>@tool</code></div>
+            <div class="bug-line bug-target" data-line="2" onclick="checkBugLine(this, true)" data-explanation="The parameter is literally named <code>args</code>. The library that builds the tool's description (pydantic) reserves that name for Python's own <code>*args</code>, so it silently renamed it to <code>v__args</code>. The AI could never send a matching argument. The fix was renaming it to <code>pytest_args</code>, and the real file has a comment explaining why."><span class="line-num">2</span><code>def run_pytest(args: str = "") -&gt; str:</code></div>
+            <div class="bug-line" data-line="3" onclick="checkBugLine(this, false)" data-hint="Just the description the AI reads. Look at the names involved."><span class="line-num">3</span><code>    """Run pytest inside the worktree to check your work before finishing."""</code></div>
+            <div class="bug-line" data-line="4" onclick="checkBugLine(this, false)" data-hint="Splitting the string is fine. The error is about the argument's name."><span class="line-num">4</span><code>    extra = args.split() if args else []</code></div>
+            <div class="bug-line" data-line="5" onclick="checkBugLine(this, false)" data-hint="This goes through the safe command runner correctly. Look earlier."><span class="line-num">5</span><code>    result = run_command("pytest", ["-q", *extra], cwd=jail.root, timeout_s=budgets["cmd_timeout_s"])</code></div>
+          </div>
+          <div class="bug-feedback"></div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🗣️</div>
+          <div class="callout-content">
+            <strong class="callout-title">The lesson for steering AI</strong>
+            <p>When a tool-calling agent keeps "calling a tool wrong", don't assume the model is dumb. Ask your AI assistant to <em>"print the generated tool schema"</em>. The bug is often in what the model was <em>shown</em>, not in what it did.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The big picture: patterns worth stealing</h2>
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)"><div class="pattern-icon" style="background: var(--color-actor-1)">✉️</div><h4 class="pattern-title">Frozen contract</h4><p class="pattern-desc">Write acceptance tests first, then make them read-only to the coder.</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)"><div class="pattern-icon" style="background: var(--color-actor-2)">⚖️</div><h4 class="pattern-title">Maker / checker</h4><p class="pattern-desc">A different model, blind to the maker's reasoning, audits the result.</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-3)"><div class="pattern-icon" style="background: var(--color-actor-3)">🪵</div><h4 class="pattern-title">Failure fingerprints</h4><p class="pattern-desc">Same normalised failure twice means stop retrying that approach.</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)"><div class="pattern-icon" style="background: var(--color-actor-4)">🧱</div><h4 class="pattern-title">Isolation + allowlists</h4><p class="pattern-desc">Worktree sandbox, jailed paths, approved commands, clean environment.</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)"><div class="pattern-icon" style="background: var(--color-actor-5)">🙋</div><h4 class="pattern-title">Escalation is success</h4><p class="pattern-desc">An honest "I'm stuck, here's why" report beats a fake "done".</p></div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-accent)"><div class="pattern-icon" style="background: var(--color-accent)">🔌</div><h4 class="pattern-title">LLM boundaries</h4><p class="pattern-desc">Every AI call sits in one small function, so tests can swap in a fake model and exercise everything else for real.</p></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Final check</h2>
+        <div class="quiz-container" id="quiz-module6">
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>A run escalates with <code>intake structured-output failure</code>. The console trace shows <code>finish_reason=length</code> on the intake call.</p></div>
+            <div class="quiz-question-block"
+                 data-correct="b"
+                 data-explanation-right="'length' means the model hit the output cap mid-answer, so the JSON was cut off and couldn't be parsed. Raise CODING_AGENT_MAX_TOKENS or use a model that answers more concisely."
+                 data-explanation-wrong="finish_reason=length is the giveaway: the answer was truncated. A half-written JSON object can't be parsed, no matter how good the prompt is.">
+              <h3 class="quiz-question">What happened, and what's your first move?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The goal was unsuitable. Rephrase it</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The response was truncated by the token cap. Raise the cap or switch models</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The jail blocked intake from reading files</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="Pushing sends code to a shared remote, which can't be undone in the sandbox. Keeping git to local look-and-save commands is what keeps the blast radius at zero."
+               data-explanation-wrong="Think about blast radius. Everything else here stays inside the worktree. A push reaches a shared server and other people, outside the simulator.">
+            <h3 class="quiz-question">An AI suggests adding <code>push</code> to the git allowlist "so the agent can open PRs itself". What's the concern?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It would make runs slower</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>None. PRs still need human review</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It lets an unattended loop affect shared systems outside its sandbox</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="The differential check forgives findings that already existed at the baseline, so if self_check fails on ruff, the agent introduced the problem in this run."
+               data-explanation-wrong="Remember the duplicate-import story: old lint debt is forgiven by comparing against the baseline. A ruff failure in self_check means the problem is new.">
+            <h3 class="quiz-question">self_check fails with a ruff finding in a file the agent edited. Was the problem already there before the run?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Almost certainly not. Pre-existing findings are filtered out by comparing against the baseline</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Probably. ruff checks the whole repository every time</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>There's no way to tell</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module6')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module6')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+  </main>
+
+</body>
+</html>

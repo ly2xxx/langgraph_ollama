@@ -1,0 +1,208 @@
+<section class="module" id="module-1">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">A Robot That Codes Until It's Done</h1>
+      <p class="module-subtitle">What the Coding Engineer is, why it exists, and what happens after you hand it a goal.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">You give it one sentence. It works until the job is checkably finished.</h2>
+        <p>The <strong>Coding Engineer</strong> is an <span class="term" data-definition="An AI agent is a program where a language model doesn't just answer once. It takes actions (reading files, running tests), looks at the results, and decides what to do next, in a loop.">AI agent</span> that takes a folder of code plus a plain-English goal, like <em>"implement the string-calculator kata so all scenarios pass"</em>. It then writes code, tests it, fixes what broke and tests again, with nobody watching.</p>
+        <p>A chatbot gives you code and hopes. This agent doesn't hope. It refuses to call a job done until <span class="term" data-definition="Automated tests are small programs that check whether other code behaves correctly, like a spell-checker for behavior. They pass (green) or fail (red) with no human judgment involved.">automated tests</span> pass <em>and</em> a second AI has tried to find a cheat.</p>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">🎯</div>
+            <h4 class="pattern-title">Goal-driven</h4>
+            <p class="pattern-desc">It stops when a test says "done", not when the AI <em>feels</em> done.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🔁</div>
+            <h4 class="pattern-title">Self-correcting</h4>
+            <p class="pattern-desc">Each failed test becomes a written "lesson" that feeds the next attempt.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-actor-5)">🧱</div>
+            <h4 class="pattern-title">Sandboxed</h4>
+            <p class="pattern-desc">It never touches your real files. You review its work and decide whether to keep it.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-3)">
+            <div class="pattern-icon" style="background: var(--color-actor-3)">🛑</div>
+            <h4 class="pattern-title">Knows when to quit</h4>
+            <p class="pattern-desc">If it's going in circles, it stops and writes you a report instead of burning money.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The fun part: it has already rewritten itself</h2>
+        <p>Look in the project's <code>diary/</code> folder and you'll find a run where the agent was pointed at <em>its own code</em>. The goal was to upgrade its "maker" component from an old <span class="term" data-definition="A library is a bundle of pre-written code you install and reuse, so you don't build common things from scratch. LangChain is a popular library for building AI apps.">library</span> feature to a newer one. It did it in 3 attempts. The <span class="term" data-definition="A commit is a saved snapshot of changes in Git, the version-control system. Each one has a unique ID (a long hex string) and a message describing the change.">commit</span> it produced is in the real history today.</p>
+
+        <div class="step-cards">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>Goal: "Migrate <code>_run_maker</code> from AgentExecutor to create_agent"</strong>
+              <p>A refactor of the agent's own engine room.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Plan 1 failed twice in the same way, so the agent dropped it</strong>
+              <p>Its tests kept spotting that a key call wasn't actually inside the function.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>Plan 2 passed every gate. Outcome: <code>done</code></strong>
+              <p>Commit <code>ea1bfa1</code> ("coding-engineer: # Migrate `_run_maker`…") went into the project's history, and a person merged it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">The core idea: verification beats intelligence</strong>
+            <p>A mediocre model inside a loop with honest tests will usually beat a brilliant model that just guesses once. The model doesn't do the clever part of this project. The <em>loop around it</em> does. Most of what you'll learn here is about that loop.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Follow one goal through the machine</h2>
+        <p>Imagine you type a goal into the <span class="term" data-definition="A CLI (command-line interface) is a text-only way to run a program by typing a command in a terminal, rather than clicking buttons.">CLI</span> or the <span class="term" data-definition="Streamlit is a Python library for turning scripts into simple web apps with buttons, text boxes and progress displays. This project uses it for its visual control panel.">Streamlit</span> panel and hit Run. Click <strong>Next Step</strong> to watch where your goal goes.</p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-m1-you","label":"You type a goal and point it at a folder of code."},
+          {"highlight":"flow-m1-intake","label":"Intake checks the goal is testable, then makes a private copy of your code (a worktree).","packet":true,"from":"m1-you","to":"m1-intake"},
+          {"highlight":"flow-m1-intake","label":"It writes the definition of done as plain-English test scenarios, then LOCKS them."},
+          {"highlight":"flow-m1-plan","label":"The planner proposes 3 different strategies. A separate judge AI scores them and the best one wins.","packet":true,"from":"m1-intake","to":"m1-plan"},
+          {"highlight":"flow-m1-maker","label":"The maker AI edits files using a small set of safe tools.","packet":true,"from":"m1-plan","to":"m1-maker"},
+          {"highlight":"flow-m1-gates","label":"Gates run the linter and the locked tests. No AI is involved, just pass or fail.","packet":true,"from":"m1-maker","to":"m1-gates"},
+          {"highlight":"flow-m1-maker","label":"Failed? Diagnose writes a lesson and sends it back for another try (or a new plan).","packet":true,"from":"m1-gates","to":"m1-maker"},
+          {"highlight":"flow-m1-review","label":"All green? A skeptical reviewer AI hunts for cheats that pass tests without doing the work.","packet":true,"from":"m1-gates","to":"m1-review"},
+          {"highlight":"flow-m1-report","label":"Approved: the work is committed to its own branch and a run report is written for you.","packet":true,"from":"m1-review","to":"m1-report"}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-m1-you"><div class="flow-actor-icon">🧑</div><span>You</span></div>
+            <div class="flow-actor" id="flow-m1-intake"><div class="flow-actor-icon">📥</div><span>Intake + BDD</span></div>
+            <div class="flow-actor" id="flow-m1-plan"><div class="flow-actor-icon">🌳</div><span>Planner</span></div>
+            <div class="flow-actor" id="flow-m1-maker"><div class="flow-actor-icon">🛠️</div><span>Maker</span></div>
+            <div class="flow-actor" id="flow-m1-gates"><div class="flow-actor-icon">🚦</div><span>Gates</span></div>
+            <div class="flow-actor" id="flow-m1-review"><div class="flow-actor-icon">🔍</div><span>Reviewer</span></div>
+            <div class="flow-actor" id="flow-m1-report"><div class="flow-actor-icon">📋</div><span>Report</span></div>
+          </div>
+          <div class="flow-packet"></div>
+          <div class="flow-step-label">Click "Next Step" to begin</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The very first lines that run</h2>
+        <p>Everything starts in <code>engine.py</code>, in a <span class="term" data-definition="A function is a named, reusable block of code that does one job. You 'call' it by name, optionally handing it inputs, and it may hand back a result.">function</span> called <code>stream_run</code>. It packs your goal into a starting "clipboard" and hands it to the machine.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · engine.py</span>
+            <pre><code><span class="code-line">    initial_state: CodingLoopState = {</span>
+<span class="code-line">        <span class="code-string">"run_id"</span>: run_id,</span>
+<span class="code-line">        <span class="code-string">"target_dir"</span>: resolved_target,</span>
+<span class="code-line">        <span class="code-string">"goal"</span>: goal,</span>
+<span class="code-line">        <span class="code-string">"hitl_bdd_approval"</span>: hitl,</span>
+<span class="code-line">        <span class="code-string">"test_style"</span>: <span class="code-string">"pytest"</span> <span class="code-keyword">if</span> <span class="code-function">str</span>(test_style).<span class="code-function">lower</span>() == <span class="code-string">"pytest"</span> <span class="code-keyword">else</span> <span class="code-string">"bdd"</span>,</span>
+<span class="code-line">        <span class="code-string">"budgets"</span>: budgets <span class="code-keyword">or</span> {},</span>
+<span class="code-line">        <span class="code-comment"># Resolved once up front (not re-derived per node) so the report and</span></span>
+<span class="code-line">        <span class="code-comment"># any UI show exactly what this run actually used, even if env vars</span></span>
+<span class="code-line">        <span class="code-comment"># change between this run and the next one.</span></span>
+<span class="code-line">        <span class="code-string">"model_info"</span>: <span class="code-function">describe_all</span>(),</span>
+<span class="code-line">    }</span>
+<span class="code-line">    config = {<span class="code-string">"configurable"</span>: {<span class="code-string">"thread_id"</span>: run_id}, <span class="code-string">"recursion_limit"</span>: <span class="code-number">150</span>}</span>
+<span class="code-line">    <span class="code-keyword">yield from</span> graph.<span class="code-function">stream</span>(initial_state, config=config, stream_mode=<span class="code-string">"updates"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Build the starting <span class="term" data-definition="State is the bundle of facts a program carries around and updates as it works. Here it's one shared dictionary that every step reads from and writes to.">state</span>, a labelled bundle of facts about this run.</p>
+              <p class="tl">A unique ID for this run, used later to resume it after a crash.</p>
+              <p class="tl">Which folder of code to work on.</p>
+              <p class="tl">Your goal, word for word.</p>
+              <p class="tl">Should it pause and ask a human about unclear tests? (Off by default.)</p>
+              <p class="tl">Which testing style: "bdd" (plain-English scenarios) unless you asked for plain "pytest".</p>
+              <p class="tl">Your limits on attempts, time and tokens. Empty means "use the defaults".</p>
+              <p class="tl">Record which AI models are in use <em>now</em>, so the final report is honest even if settings change later.</p>
+              <p class="tl">Bookkeeping: tie saved progress to this run ID, and give up after 150 steps no matter what.</p>
+              <p class="tl">Start the machine and pass along each step's update as it happens, so a UI can show live progress.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🗣️</div>
+          <div class="callout-content">
+            <strong class="callout-title">Vocabulary for steering AI</strong>
+            <p><code>yield</code> makes this a <span class="term" data-definition="A generator is a function that hands back results one at a time as they become ready, instead of all at once at the end. It's like a conveyor belt rather than a delivery truck.">generator</span>. If you ever want a "live progress" feature, you'd ask the AI to <em>"stream updates from the graph with a generator"</em> rather than "make it show stuff while it runs".</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module1">
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="The agent only declares success when objective tests pass and a reviewer approves, so a 'done' that hasn't been verified never gets out."
+               data-explanation-wrong="The key design choice is that the AI never decides it's done by itself. Tests and an independent reviewer do. That's what stops it bluffing.">
+            <h3 class="quiz-question">A friend says: "AI coding tools always claim they're finished when the code is broken." How does the Coding Engineer avoid this?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It uses a bigger, smarter AI model</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Done" is decided by tests and a separate reviewer, never by the coding AI itself</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It asks the coding AI "are you sure?" three times</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="The run ID is the thread ID for saved checkpoints, so re-using it picks up where the run stopped."
+               data-explanation-wrong="Look again at the config line: the run ID is used as the 'thread_id' for saved progress. Same ID means 'continue that run'.">
+            <h3 class="quiz-question">Your laptop crashes 20 minutes into a run. What would let you continue instead of starting over?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Typing the same goal again</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Raising the recursion limit</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Starting a run with the same run ID</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Your real code is never edited. The agent works on a separate branch in its own copy, and a person decides whether to merge."
+               data-explanation-wrong="Remember 'sandboxed': the agent works on a private copy on its own branch. Your checkout stays untouched until you choose to merge.">
+            <h3 class="quiz-question">You run the agent on your project, and halfway through you notice the goal was a bad idea. What happened to your real files?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Nothing. All edits happened in a separate copy on its own branch</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>They're half-edited and you need to undo by hand</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>They're edited, but there's an automatic backup</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

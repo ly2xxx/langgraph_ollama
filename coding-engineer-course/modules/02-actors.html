@@ -1,0 +1,245 @@
+<section class="module" id="module-2" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">02</span>
+      <h1 class="module-title">Ten Rooms and a Clipboard</h1>
+      <p class="module-subtitle">The agent is a board game: ten squares, arrows between them, and one shared clipboard that every square writes on.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">It's a board game, not a brain</h2>
+        <p>Think of <em>Snakes and Ladders</em>. There are fixed squares, arrows between them, and a rule at certain squares that decides where you go next. A bad roll sends you back down a snake. The Coding Engineer works the same way, and engineers call this shape a <span class="term" data-definition="A state machine is a design where a program can only be in one of a fixed set of 'situations' (states or nodes) at a time, with explicit rules for moving between them. Like a board game, you always know which square you're on.">state machine</span>.</p>
+        <p>It's built with <span class="term" data-definition="LangGraph is a Python library for building AI workflows as graphs: boxes (nodes) that do work, connected by arrows (edges) that say what runs next. It also handles saving progress.">LangGraph</span>. Each square is a <span class="term" data-definition="A node is one box in the graph: a single Python function that reads the shared state, does one job, and returns what changed.">node</span>, and each arrow is an <span class="term" data-definition="An edge is an arrow between two nodes saying 'after this one, run that one'. A conditional edge has a rule that picks between several possible next nodes.">edge</span>. Click any square below.</p>
+
+        <div class="arch-diagram">
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Setup · runs once</h4>
+            <div class="arch-component" data-desc="intake: An AI reads your goal and turns it into checkable acceptance criteria. If it can't, it rejects the goal outright. It also creates the private worktree copy of your code.">
+              <div class="arch-icon">📥</div><span>intake</span>
+            </div>
+            <div class="arch-component" data-desc="author_bdd: Writes the definition of done as Gherkin scenarios plus test code, then freezes them so nobody can edit them later. If matching scenarios already exist, it checks whether they actually fit this goal.">
+              <div class="arch-icon">📜</div><span>author_bdd</span>
+            </div>
+          </div>
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Plan &amp; build</h4>
+            <div class="arch-component" data-desc="plan_tot: Tree-of-Thought planning. One AI proposes 3 different strategies, a separate judge AI scores them, and the best untried one becomes the active plan.">
+              <div class="arch-icon">🌳</div><span>plan_tot</span>
+            </div>
+            <div class="arch-component" data-desc="code: The maker. An AI with six safe tools (read, list, write, delete, move, run tests) edits files in the worktree to carry out the plan.">
+              <div class="arch-icon">🛠️</div><span>code</span>
+            </div>
+          </div>
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Gates · no AI</h4>
+            <div class="arch-component" data-desc="self_check: Fast feedback. Runs ruff (a linter) and the ordinary pytest tests. It only fails on NEW lint problems the maker introduced, not old ones.">
+              <div class="arch-icon">⚡</div><span>self_check</span>
+            </div>
+            <div class="arch-component" data-desc="bdd_gate: Runs the frozen acceptance scenarios. This is the objective 'is the goal met?' test, and the maker can't edit it.">
+              <div class="arch-icon">🚦</div><span>bdd_gate</span>
+            </div>
+            <div class="arch-component" data-desc="review: A skeptical second AI reads the diff and the test code, looking for cheats: tests that assert nothing, hard-coded answers, stubs. It can approve or reject.">
+              <div class="arch-icon">🔍</div><span>review</span>
+            </div>
+          </div>
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Recovery &amp; endings</h4>
+            <div class="arch-component" data-desc="diagnose: Every failure lands here. It classifies the failure, takes its 'fingerprint', writes a lesson, and decides: retry, switch plan, or give up.">
+              <div class="arch-icon">🩺</div><span>diagnose</span>
+            </div>
+            <div class="arch-component" data-desc="finalize: The happy ending. Commits the work to the run's branch and writes run-report.md and state.json.">
+              <div class="arch-icon">🏁</div><span>finalize</span>
+            </div>
+            <div class="arch-component" data-desc="escalate: The honest ending. Saves the work-in-progress, records WHY it stopped, and writes the same report so a human can take over. This is a first-class outcome, not a crash.">
+              <div class="arch-icon">🙋</div><span>escalate</span>
+            </div>
+          </div>
+          <div class="arch-description">Click any component to learn what it does</div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The clipboard every room writes on</h2>
+        <p>Nodes don't phone each other. Each one reads a shared <span class="term" data-definition="State is the bundle of facts the program carries around and updates as it works. In this project it's called CodingLoopState.">state</span> object, does its job, and returns <em>only the fields it changed</em>. LangGraph merges those changes in. The state's shape is declared with a <span class="term" data-definition="A TypedDict is a Python way of saying 'this dictionary must have these named fields, each holding this kind of value'. It's like a form with labelled boxes.">TypedDict</span>. Here's one small piece of it: a single lesson learned from a failure.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · state.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">class</span> <span class="code-function">Lesson</span>(TypedDict):</span>
+<span class="code-line">    <span class="code-property">attempt</span>: <span class="code-keyword">int</span></span>
+<span class="code-line">    <span class="code-property">plan_id</span>: <span class="code-keyword">str</span></span>
+<span class="code-line">    <span class="code-property">failure_signature</span>: <span class="code-keyword">str</span> | <span class="code-keyword">None</span></span>
+<span class="code-line">    <span class="code-property">category</span>: <span class="code-keyword">str</span> | <span class="code-keyword">None</span>  <span class="code-comment"># added Phase 2 -- diagnose's LLM classification</span></span>
+<span class="code-line">    <span class="code-property">insight</span>: <span class="code-keyword">str</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define a form called "Lesson" with exactly these boxes:</p>
+              <p class="tl">Which attempt number failed (a whole number).</p>
+              <p class="tl">Which plan was being followed, e.g. "plan-2".</p>
+              <p class="tl">A fingerprint of the failure, or nothing if there isn't one.</p>
+              <p class="tl">What kind of failure the AI thinks it was: syntax, logic, flaky…</p>
+              <p class="tl">One sentence of advice for the next attempt. This is the part future attempts actually read.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">goal / spec</code><span class="badge-desc">What you asked for, and the checkable criteria intake pulled out of it</span></div>
+          <div class="badge-item"><code class="badge-code">candidate_plans</code><span class="badge-desc">The 3 strategies, their scores, and which is active / exhausted</span></div>
+          <div class="badge-item"><code class="badge-code">attempt / total_attempts</code><span class="badge-desc">Counters the budgets are checked against</span></div>
+          <div class="badge-item"><code class="badge-code">test_report / bdd_report</code><span class="badge-desc">The gates' raw results, so the routers can read pass/fail</span></div>
+          <div class="badge-item"><code class="badge-code">lessons</code><span class="badge-desc">The growing notebook of what went wrong and what to try next</span></div>
+          <div class="badge-item"><code class="badge-code">status</code><span class="badge-desc">planning → coding → testing → done or escalated</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The arrows: who decides where to go next?</h2>
+        <p>Some arrows are fixed ("after plan_tot, always code"). Others are <strong>conditional</strong>: a tiny <span class="term" data-definition="A router (or routing function) looks at the current state and returns the NAME of the next node to run. It makes decisions, but never does any real work itself.">router</span> function reads the clipboard and names the next square. Routers are plain code with no AI in them, so the path is predictable.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · engine.py</span>
+            <pre><code><span class="code-line">    graph.<span class="code-function">add_edge</span>(<span class="code-string">"plan_tot"</span>, <span class="code-string">"code"</span>)</span>
+<span class="code-line">    graph.<span class="code-function">add_edge</span>(<span class="code-string">"code"</span>, <span class="code-string">"self_check"</span>)</span>
+<span class="code-line">    graph.<span class="code-function">add_conditional_edges</span>(</span>
+<span class="code-line">        <span class="code-string">"self_check"</span>,</span>
+<span class="code-line">        _route_after_self_check,</span>
+<span class="code-line">        {<span class="code-string">"bdd_gate"</span>: <span class="code-string">"bdd_gate"</span>, <span class="code-string">"review"</span>: <span class="code-string">"review"</span>, <span class="code-string">"diagnose"</span>: <span class="code-string">"diagnose"</span>},</span>
+<span class="code-line">    )</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Fixed arrow: once a plan is chosen, always start coding.</p>
+              <p class="tl">Fixed arrow: once coding finishes, always run the quick checks.</p>
+              <p class="tl">After the quick checks, the next step depends on the result…</p>
+              <p class="tl">…starting from the self_check square…</p>
+              <p class="tl">…ask this router function which way to go…</p>
+              <p class="tl">…and allow only these three destinations. Anything else is an error.</p>
+              <p class="tl">Done wiring this junction.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py</span>
+            <pre><code><span class="code-line"><span class="code-keyword">def</span> <span class="code-function">_route_after_self_check</span>(state: CodingLoopState) -&gt; <span class="code-keyword">str</span>:</span>
+<span class="code-line">    <span class="code-keyword">if not</span> state[<span class="code-string">"test_report"</span>][<span class="code-string">"passed"</span>]:</span>
+<span class="code-line">        <span class="code-keyword">return</span> <span class="code-string">"diagnose"</span></span>
+<span class="code-line">    <span class="code-comment"># In pytest mode self_check IS the test gate, so a green one goes straight</span></span>
+<span class="code-line">    <span class="code-comment"># to the reviewer; there are no scenarios for bdd_gate to run.</span></span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-string">"review"</span> <span class="code-keyword">if</span> state.<span class="code-function">get</span>(<span class="code-string">"test_style"</span>) == <span class="code-string">"pytest"</span> <span class="code-keyword">else</span> <span class="code-string">"bdd_gate"</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">A router: look at the clipboard and return the name of the next square.</p>
+              <p class="tl">If the quick checks did <em>not</em> pass…</p>
+              <p class="tl">…go to the doctor (diagnose). That's the snake.</p>
+              <p class="tl">Otherwise, it passed. Which test style is this run using?</p>
+              <p class="tl">(The comment explains the edge case.)</p>
+              <p class="tl">Plain-pytest mode skips straight to review. BDD mode runs the frozen scenarios next.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Keep decisions and work apart</strong>
+            <p>Nodes <em>do</em> work and routers <em>decide</em>, and they're never mixed. When an agent misbehaves you can read the routers to see exactly why it went where it went. A good instruction for an AI tool: <em>"keep routing logic in pure functions, separate from the nodes."</em></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where each kind of logic lives</h2>
+        <p>The package is split so each file has one job. Knowing this lets you tell an AI <em>"put that in gates.py, not nodes.py"</em>.</p>
+
+        <div class="file-tree">
+          <div class="ft-folder open">
+            <span class="ft-name">coding_agent/</span>
+            <span class="ft-desc">The whole agent</span>
+            <div class="ft-children">
+              <div class="ft-file"><span class="ft-name">engine.py</span><span class="ft-desc">Wires the 10 nodes into a graph; CLI entry point</span></div>
+              <div class="ft-file"><span class="ft-name">state.py</span><span class="ft-desc">The clipboard's shape + default budgets</span></div>
+              <div class="ft-file"><span class="ft-name">nodes.py</span><span class="ft-desc">The 10 squares and their routers</span></div>
+              <div class="ft-file"><span class="ft-name">llm_boundaries.py</span><span class="ft-desc">Every call to an AI model, isolated in one place</span></div>
+              <div class="ft-file"><span class="ft-name">prompts.py</span><span class="ft-desc">The instructions each AI role is given</span></div>
+              <div class="ft-file"><span class="ft-name">schemas.py</span><span class="ft-desc">The exact shapes AI answers must come back in</span></div>
+              <div class="ft-file"><span class="ft-name">models.py</span><span class="ft-desc">Which AI model plays which role</span></div>
+              <div class="ft-file"><span class="ft-name">gates.py</span><span class="ft-desc">Lint/test result reading; the "only new problems" trick</span></div>
+              <div class="ft-file"><span class="ft-name">signatures.py</span><span class="ft-desc">Failure fingerprints for no-progress detection</span></div>
+              <div class="ft-file"><span class="ft-name">maker_tools.py</span><span class="ft-desc">The 6 tools the maker AI is allowed to use</span></div>
+              <div class="ft-file"><span class="ft-name">report.py</span><span class="ft-desc">Writes run-report.md and state.json</span></div>
+              <div class="ft-folder">
+                <span class="ft-name">tools/</span>
+                <span class="ft-desc">code_exec.py (the jail + safe command runner), worktree.py (git copies)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Match the square to its job</h2>
+        <div class="dnd-container" id="dnd-module2">
+          <div class="dnd-chips">
+            <div class="dnd-chip" draggable="true" data-answer="intake">intake</div>
+            <div class="dnd-chip" draggable="true" data-answer="bdd_gate">bdd_gate</div>
+            <div class="dnd-chip" draggable="true" data-answer="review">review</div>
+            <div class="dnd-chip" draggable="true" data-answer="diagnose">diagnose</div>
+            <div class="dnd-chip" draggable="true" data-answer="escalate">escalate</div>
+          </div>
+          <div class="dnd-zones">
+            <div class="dnd-zone" data-correct="intake"><p class="dnd-zone-label">Refuses "make the app better" because there's nothing to test</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="review"><p class="dnd-zone-label">Notices a test that says <code>assert True</code> and rejects it</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="bdd_gate"><p class="dnd-zone-label">Runs the locked scenarios with no AI involved</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="diagnose"><p class="dnd-zone-label">Decides "this plan is going in circles, try a different one"</p><div class="dnd-zone-target">Drop here</div></div>
+            <div class="dnd-zone" data-correct="escalate"><p class="dnd-zone-label">Hands the half-finished work to a human with a reason</p><div class="dnd-zone-target">Drop here</div></div>
+          </div>
+          <button class="btn" onclick="checkDnD('dnd-module2')">Check Matches</button>
+          <button class="btn" onclick="resetDnD('dnd-module2')">Reset</button>
+        </div>
+
+        <div class="quiz-container" id="quiz-module2">
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="Where to go after a passing bdd_gate is a routing decision, so it belongs in a router (and its conditional-edge map in engine.py), not inside a node."
+               data-explanation-wrong="Think about who decides direction. Nodes do work and routers pick the next square. Adding a new path after bdd_gate means changing that router and the destinations it's allowed.">
+            <h3 class="quiz-question">You want a new step: after bdd_gate passes, run a "performance check" before review. What would you tell your AI tool to change?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Add a performance test inside the review prompt</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Add a new node, then update the router after bdd_gate and its conditional-edge map to route there</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Make the bdd_gate node call the performance check itself</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="The gate stored a result on the clipboard, but routing is decided by reading state. If the router checks a field the node never wrote, it'll take the wrong arrow."
+               data-explanation-wrong="Nodes don't talk to each other directly. They only share the clipboard. If a gate's result isn't routed properly, the first suspect is a mismatch between what the node writes and what the router reads.">
+            <h3 class="quiz-question">The agent keeps going to review even though the tests failed. Where would you look first?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The router: does it read the same state field the gate node writes?</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The reviewer's prompt wording</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Which AI model is configured</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

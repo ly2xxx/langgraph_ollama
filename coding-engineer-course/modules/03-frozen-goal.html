@@ -1,0 +1,291 @@
+<section class="module" id="module-3">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">Sealing the Exam Before Studying</h1>
+      <p class="module-subtitle">How the agent writes its own definition of done, then locks it so it can never quietly lower the bar.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The temptation every AI coder faces</h2>
+        <p>Picture a student who writes their own exam and can edit it while taking it. You can guess how they'd do. An AI told "make the tests pass" faces the same temptation: the cheapest fix is often to <em>weaken the test</em>.</p>
+        <p>The Coding Engineer's answer works like a sealed envelope. The exam is written <strong>first</strong> and sealed. The student can read it any time but can never change a word.</p>
+
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-step-num">1</div><p><strong>intake</strong> turns your goal into checkable criteria</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">2</div><p><strong>author_bdd</strong> writes them as test scenarios</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">3</div><p>The scenario files are <strong>frozen</strong>: read-only from now on</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">4</div><p>Only <em>then</em> does any code get written</p></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Step 1: Intake refuses jobs it can't grade</h2>
+        <p>Before anything else, an AI reads your goal and fills in a strict form (the <code>TargetSpec</code> <span class="term" data-definition="A schema is a precise description of the shape data must have: which fields, of what type. Here, the AI's answer must fit the schema or it's rejected.">schema</span>). The key box is <code>is_suitable</code>. If the goal can't be turned into things a test could check, the run stops right here.</p>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-error)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🌫️</div>
+            <h4 class="pattern-title">Too vague</h4>
+            <p class="pattern-desc">"Make the app nicer." What would a test even assert?</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-error)">
+            <div class="pattern-icon" style="background: var(--color-actor-3)">🏛️</div>
+            <h4 class="pattern-title">Architecture calls</h4>
+            <p class="pattern-desc">"Should we use microservices?" That's a human judgment call.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-error)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">🔐</div>
+            <h4 class="pattern-title">Auth &amp; payments</h4>
+            <p class="pattern-desc">Too risky to hand to an unattended loop.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-error)">
+            <div class="pattern-icon" style="background: var(--color-actor-2)">🚀</div>
+            <h4 class="pattern-title">Deployments</h4>
+            <p class="pattern-desc">Touches the real world and can't be undone.</p>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">if not</span> spec.is_suitable:</span>
+<span class="code-line">        <span class="code-keyword">return</span> {</span>
+<span class="code-line">            <span class="code-string">"spec"</span>: spec.<span class="code-function">model_dump</span>(),</span>
+<span class="code-line">            <span class="code-string">"budgets"</span>: budgets,</span>
+<span class="code-line">            <span class="code-string">"run_started_at"</span>: time.<span class="code-function">time</span>(),</span>
+<span class="code-line">            <span class="code-string">"status"</span>: <span class="code-string">"escalated"</span>,</span>
+<span class="code-line">            <span class="code-string">"escalation_reason"</span>: <span class="code-string">f"unsuitable goal: {spec.rejection_reason or 'not checkable'}"</span>,</span>
+<span class="code-line">            <span class="code-string">"messages"</span>: [<span class="code-function">_status_message</span>(<span class="code-string">"intake"</span>, <span class="code-keyword">False</span>, note=spec.rejection_reason <span class="code-keyword">or</span> <span class="code-string">"goal rejected"</span>)],</span>
+<span class="code-line">        }</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If the AI judged the goal untestable…</p>
+              <p class="tl">…write these updates onto the clipboard and stop this node:</p>
+              <p class="tl">Keep the AI's reading of the goal, for the report.</p>
+              <p class="tl">Record the budgets in use.</p>
+              <p class="tl">Note the start time.</p>
+              <p class="tl">Mark the run as escalated. The router will send it straight to the "hand back to a human" ending.</p>
+              <p class="tl">Say <em>why</em>, using the AI's own reason if it gave one.</p>
+              <p class="tl">Add a red "FAIL" line to the live progress feed.</p>
+              <p class="tl">No worktree created, no tokens wasted.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Step 2: The exam is written in plain English</h2>
+        <p>The scenarios use <span class="term" data-definition="Gherkin is a plain-English format for describing behavior as scenarios using Given / When / Then. It's readable by non-programmers but can also be run as tests.">Gherkin</span>, the language of <span class="term" data-definition="BDD (Behavior-Driven Development) means describing what software should do as concrete example scenarios first, then writing code until those scenarios pass.">BDD</span>. A matching <span class="term" data-definition="A step definition is the Python code behind each Gherkin line. It's what actually checks that 'Then it should contain X' is true. The tool connecting them here is pytest-bdd.">step-definition</span> file turns each English line into a real check. This is the actual file from the self-rewrite run in Module 1:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · features/migrate_run_maker.feature</span>
+            <pre><code><span class="code-line">  <span class="code-keyword">Scenario:</span> create_agent is actually called inside _run_maker</span>
+<span class="code-line">    <span class="code-keyword">Given</span> the source file coding_agent/llm_boundaries.py</span>
+<span class="code-line">    <span class="code-keyword">Then</span> <span class="code-string">"create_agent"</span> should be called within the <span class="code-string">"_run_maker"</span> function</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">A named example of what "done" means.</p>
+              <p class="tl">Starting point: look at this specific file.</p>
+              <p class="tl">The check: the new function must really be <em>used</em> in the right place. Importing it isn't enough. This exact scenario failed plan 1 twice and forced the agent onto a different plan.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🧭</div>
+          <div class="callout-content">
+            <strong class="callout-title">Two testing styles</strong>
+            <p>Writing a whole feature file plus step code in one AI call is the most fragile request in the loop. Weaker models can pick <code>test_style="pytest"</code>, which skips BDD. The acceptance criteria become the contract, and the maker must write ordinary <span class="term" data-definition="pytest is the most popular Python testing tool. You write functions starting with test_, and pytest runs them all and reports which passed or failed.">pytest</span> tests alongside its code.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Step 3: The jail that enforces the seal</h2>
+        <p>The maker AI never touches files directly. Every write, delete or move goes through a <code>Jail</code> object, which checks two things: <em>is this path inside the sandbox?</em> and <em>is it frozen?</em> Watch what happens when the maker gets tempted.</p>
+
+        <div class="chat-window" id="chat-module3">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="maker" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">M</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">Maker</span>
+                <p>Ugh, scenario 2 keeps failing. I'll just tweak the feature file so it only checks the import. 😇 <code>write_file("features/migrate_run_maker.feature", …)</code></p></div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="jail" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">Jail</span>
+                <p>Nope. <code>ERROR: write refused: features/migrate_run_maker.feature is frozen and cannot be modified</code></p></div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="maker" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">M</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">Maker</span>
+                <p>Fine. What about <code>../../somewhere_else/app.py</code>? Just a little peek outside…</p></div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="jail" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">Jail</span>
+                <p><code>path escapes worktree</code>. I follow shortcuts and symlinks to their real location before checking, so tricks don't work.</p></div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="maker" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">M</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">Maker</span>
+                <p>OK, OK. I'll actually call <code>create_agent(...)</code> inside <code>_run_maker</code> like the scenario says.</p></div>
+            </div>
+            <div class="chat-message" data-msg="5" data-sender="jail" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">Jail</span>
+                <p><code>wrote coding_agent/llm_boundaries.py</code> ✅ See? That's what I'm here for.</p></div>
+            </div>
+          </div>
+          <div class="chat-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module3-typing-avatar">?</div>
+            <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · tools/code_exec.py</span>
+            <pre><code><span class="code-line">    <span class="code-keyword">def</span> <span class="code-function">_check_frozen</span>(self, real_path: Path, op: <span class="code-keyword">str</span>) -&gt; <span class="code-keyword">None</span>:</span>
+<span class="code-line">        <span class="code-keyword">try</span>:</span>
+<span class="code-line">            rel = real_path.<span class="code-function">relative_to</span>(self.root)</span>
+<span class="code-line">        <span class="code-keyword">except</span> ValueError:</span>
+<span class="code-line">            rel = real_path</span>
+<span class="code-line"></span>
+<span class="code-line">        <span class="code-comment"># .git internals are always frozen, even if never explicitly listed.</span></span>
+<span class="code-line">        <span class="code-keyword">if</span> rel.parts <span class="code-keyword">and</span> rel.parts[<span class="code-number">0</span>] == <span class="code-string">".git"</span>:</span>
+<span class="code-line">            <span class="code-keyword">raise</span> <span class="code-function">JailViolation</span>(<span class="code-string">f"{op} refused: {rel} is inside .git, which is always frozen"</span>)</span>
+<span class="code-line"></span>
+<span class="code-line">        <span class="code-keyword">for</span> frozen_rel <span class="code-keyword">in</span> self.frozen:</span>
+<span class="code-line">            <span class="code-keyword">if</span> rel == frozen_rel <span class="code-keyword">or</span> self.<span class="code-function">_is_relative_to</span>(real_path, self.root / frozen_rel):</span>
+<span class="code-line">                <span class="code-keyword">raise</span> <span class="code-function">JailViolation</span>(<span class="code-string">f"{op} refused: {rel} is frozen and cannot be modified"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Before any write/delete/move, check whether the target is off-limits.</p>
+              <p class="tl">Try to express the path relative to the sandbox root…</p>
+              <p class="tl">…e.g. turn "C:/…/worktree/features/x.feature" into "features/x.feature".</p>
+              <p class="tl">If that's impossible…</p>
+              <p class="tl">…just use the path as-is.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">Git's own bookkeeping folder is always off-limits:</p>
+              <p class="tl">if the path starts with ".git"…</p>
+              <p class="tl">…refuse, with an error message saying exactly why.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">For every frozen file or folder on the list…</p>
+              <p class="tl">…if this path IS it, or sits inside it…</p>
+              <p class="tl">…refuse. The maker sees this text as a tool error and learns from it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Loud refusals beat silent ones</strong>
+            <p>The jail <span class="term" data-definition="To raise an exception is to stop the current operation and signal an error up to whoever called it, with a message. Here the tool wrapper catches it and shows the AI the message.">raises an exception</span> instead of quietly ignoring bad writes. The tool turns that into an <code>ERROR: …</code> message the AI can read. A blocked action that fails silently teaches the AI nothing and hides bugs from you. A clear refusal is useful feedback.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A real bug: the exam that was already passed</h2>
+        <p>If a feature file already exists in the repo, author_bdd can <em>adopt</em> it instead of writing a new one. That caused one of the project's most instructive failures:</p>
+
+        <div class="step-cards">
+          <div class="step-card"><div class="step-num">1</div><div class="step-body"><strong>An old run left a feature file in the repo</strong><p><code>rag_agent_move.feature</code>, from a week-old, unrelated goal.</p></div></div>
+          <div class="step-card"><div class="step-num">2</div><div class="step-body"><strong>Run 20260808T231438 adopted it as its contract</strong><p>Its real goal was an AgentExecutor migration. It froze the wrong exam.</p></div></div>
+          <div class="step-card"><div class="step-num">3</div><div class="step-body"><strong>Every gate went green before any code was written</strong><p>No failing test ever pushed the maker to change anything.</p></div></div>
+          <div class="step-card"><div class="step-num">4</div><div class="step-body"><strong>The run escalated with an empty diff</strong><p>It had dropped two good plans over a problem neither of them caused.</p></div></div>
+        </div>
+
+        <p>The fix is an <strong>adoption gate</strong>. A cold, separate AI is asked whether these scenarios actually test <em>this</em> goal. The prompt says it bluntly:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · prompts.py (BDD_RELEVANCE_PROMPT)</span>
+            <pre><code><span class="code-line"><span class="code-string">of the goal being implemented. That the scenarios pass right now is evidence AGAINST relevance, not \</span></span>
+<span class="code-line"><span class="code-string">for it.</span></span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">If the tests already pass before any work is done, they're probably testing something else.</p>
+              <p class="tl">A useful contract should <em>fail</em> at first. Otherwise it can't push the work forward.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module3">
+          <div class="scenario-block">
+            <div class="scenario-context"><span class="scenario-label">Scenario</span>
+              <p>You ask an AI tool to build a similar agent for your team. Its draft lets the coding AI edit any file, including tests, "so it can fix broken tests too."</p></div>
+            <div class="quiz-question-block"
+                 data-correct="c"
+                 data-explanation-right="If the coder can edit the acceptance tests, it can redefine 'done' to match whatever it produced. Freezing the contract is what makes the green light mean something."
+                 data-explanation-wrong="Think about the sealed envelope. If the student can rewrite the exam, a passing grade proves nothing. The fix is to freeze the acceptance tests, not to trust the coder more.">
+              <h3 class="quiz-question">What's the main risk, and what should you ask for?</h3>
+              <div class="quiz-options">
+                <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It'll be slow. Ask for parallel test runs</span></button>
+                <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>None. Fixing tests is a helpful feature</span></button>
+                <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It can weaken tests to pass. Ask for acceptance tests to be read-only to the coder</span></button>
+              </div>
+              <div class="quiz-feedback"></div>
+            </div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="Tests that pass before any change can't drive the change. That's the adoption bug from run 20260808T231438."
+               data-explanation-wrong="Remember the 'already passed exam'. If the scenarios are green before the maker does anything, they're almost certainly testing some other goal.">
+            <h3 class="quiz-question">A run report shows: bdd_gate passed on attempt 1, but the diff is empty. What's the most likely explanation?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The maker is extremely efficient</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The frozen scenarios don't actually test this goal (wrong contract adopted)</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The jail blocked all the writes</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="A clear goal with a concrete expected outcome is what intake can turn into checkable criteria."
+               data-explanation-wrong="Intake asks: could a test assert this? Only one option names a specific, observable result.">
+            <h3 class="quiz-question">Which goal is most likely to pass intake?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Move utils.py into a helpers/ folder and update every import so the tests still pass"</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Clean up the codebase"</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>"Add Stripe checkout and deploy it"</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

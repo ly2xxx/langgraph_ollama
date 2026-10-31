@@ -1,0 +1,249 @@
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Two Brains: Makers and Checkers</h1>
+      <p class="module-subtitle">Why one AI model proposes and builds, while a different, colder one judges and audits.</p>
+    </header>
+
+    <div class="module-body">
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Never let the contestant judge the contest</h2>
+        <p>An architecture competition doesn't let the entrants score their own designs. An independent jury does. This agent follows the same rule. Every AI call asks for one of two <strong>roles</strong>, and the roles can be filled by different <span class="term" data-definition="An LLM (large language model) is the AI engine behind tools like ChatGPT or Claude. It reads text and predicts what text should come next. Here, models are run through Ollama or an OpenAI-compatible service.">LLMs</span>.</p>
+
+        <div class="icon-rows">
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-1)">🛠️</div>
+            <div><strong>primary: the contestant</strong>
+              <p>Intake, writing scenarios, proposing plans, coding, diagnosing. These are the frequent, creative calls inside the loop.</p></div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-circle" style="background: var(--color-actor-2)">⚖️</div>
+            <div><strong>secondary: the jury</strong>
+              <p>Scoring plans, checking adopted scenarios, adversarial review. These are the independent judgments. If not configured, it falls back to the primary model, so the loop still works with one.</p></div>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (_score_plans)</span>
+            <pre><code><span class="code-line">    secondary = <span class="code-function">_eng</span>().<span class="code-function">get_llm</span>(<span class="code-string">"secondary"</span>, temperature=<span class="code-number">0.0</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">"Give me whichever model plays the <em>jury</em> role, at zero <span class="term" data-definition="Temperature controls how random an AI's answers are. 0 = predictable and consistent (good for judging); higher (0.8) = more varied and creative (good for brainstorming).">temperature</span>." No node ever builds a model by hand. They all go through <code>get_llm(role)</code>, so swapping models is a settings change, not a code rewrite.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-list">
+          <div class="badge-item"><code class="badge-code">propose plans · primary · 0.8</code><span class="badge-desc">Hot: we <em>want</em> three genuinely different ideas</span></div>
+          <div class="badge-item"><code class="badge-code">write scenarios · primary · 0.3</code><span class="badge-desc">Slightly warm: some variety, mostly careful</span></div>
+          <div class="badge-item"><code class="badge-code">code (maker) · primary · 0.2</code><span class="badge-desc">Cool: precise edits, not creative writing</span></div>
+          <div class="badge-item"><code class="badge-code">judge · review · secondary · 0.0</code><span class="badge-desc">Ice cold: same input, same verdict, every time</span></div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Tree-of-Thought: brainstorm, then let the jury pick</h2>
+        <p>Before coding, <code>plan_tot</code> runs <span class="term" data-definition="Tree-of-Thought (ToT) is a technique where an AI explores several alternative approaches (branches) and evaluates them, instead of committing to its first idea.">Tree-of-Thought</span> planning. The primary model proposes <em>k</em> = 3 distinct strategies, and the jury scores each from 0 to 10. When a plan dies, the survivors are <strong>re-scored with the lessons learned</strong> instead of being thrown away and regenerated. Watch:</p>
+
+        <div class="chat-window" id="chat-module4">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="planner" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">P</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-1)">Planner (primary, 0.8)</span>
+                <p>Goal: fix flaky DB timeouts. Three ideas: <b>P1</b> raise the connection pool size. <b>P2</b> add retry with backoff. <b>P3</b> switch to an async driver.</p></div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="judge" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-2)">Judge (secondary, 0.0)</span>
+                <p>I didn't write these. Scores: P1 <b>8.5</b> (simplest), P2 <b>7.0</b>, P3 <b>4.0</b> (big, risky rewrite). P1 is active.</p></div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="maker" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">M</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-4)">Maker</span>
+                <p>Pool size raised. Tests still time out. Twice, the exact same way. 😩</p></div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="diagnose" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">D</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-3)">Diagnose</span>
+                <p>Same fingerprint twice, so P1 is <b>exhausted</b>. Lesson recorded: <i>"Pool size isn't the bottleneck. Timeouts come from network drops."</i></p></div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="judge" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+              <div class="chat-bubble"><span class="chat-sender" style="color: var(--color-actor-2)">Judge</span>
+                <p>Re-scoring the survivors <i>with that lesson</i>: P2 jumps to <b>9.2</b> because retries directly handle network drops. P3 stays low. P2 is active.</p></div>
+            </div>
+          </div>
+          <div class="chat-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module4-typing-avatar">?</div>
+            <div class="chat-typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (plan_tot_node)</span>
+            <pre><code><span class="code-line">    best = <span class="code-function">max</span>(candidates, key=<span class="code-keyword">lambda</span> p: p.<span class="code-function">get</span>(<span class="code-string">"score"</span>, <span class="code-number">0.0</span>))</span>
+<span class="code-line">    <span class="code-keyword">for</span> p <span class="code-keyword">in</span> existing:</span>
+<span class="code-line">        p[<span class="code-string">"status"</span>] = <span class="code-string">"active"</span> <span class="code-keyword">if</span> p[<span class="code-string">"id"</span>] == best[<span class="code-string">"id"</span>] <span class="code-keyword">else</span> (<span class="code-string">"exhausted"</span> <span class="code-keyword">if</span> p[<span class="code-string">"id"</span>] <span class="code-keyword">in</span> exhausted <span class="code-keyword">else</span> <span class="code-string">"untried"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Among plans that aren't dead yet, pick the one with the highest jury score.</p>
+              <p class="tl">Then go through every plan…</p>
+              <p class="tl">…and label it: the winner is "active", the dead ones stay "exhausted", everything else waits as "untried". The labels show up in the run report.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Branch while thinking, not while doing</strong>
+            <p>Exploring three plans <em>as text</em> is cheap. Executing three plans in parallel would triple the cost. So branching happens only in planning, and coding is one plan at a time. Lessons from dead branches feed the next choice, which the docs call the <span class="term" data-definition="Graph-of-Thought (GoT) extends Tree-of-Thought by letting insights from different branches combine. Here, lessons from failed plans are merged into the scoring of the remaining ones.">Graph-of-Thought</span> step.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The building inspector who never met the builder</h2>
+        <p>Passing tests isn't the finish line. <code>review</code> sends the jury model the goal, the <span class="term" data-definition="A diff is a line-by-line list of what changed between two versions of files: lines removed (red, minus) and lines added (green, plus).">diff</span>, the step definitions and the green test output, but <strong>not</strong> the maker's reasoning, so it can't be talked into agreeing. Its prompt opens with: <em>"assume the maker is wrong until proven otherwise."</em></p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · nodes.py (review_node)</span>
+            <pre><code><span class="code-line">    blocking = [f <span class="code-keyword">for</span> f <span class="code-keyword">in</span> verdict.findings <span class="code-keyword">if</span> f.severity <span class="code-keyword">in</span> (<span class="code-string">"blocker"</span>, <span class="code-string">"major"</span>)]</span>
+<span class="code-line">    is_reject = verdict.verdict == <span class="code-string">"reject"</span> <span class="code-keyword">and</span> <span class="code-function">bool</span>(blocking)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">From everything the inspector flagged, keep only the serious problems (blocker or major).</p>
+              <p class="tl">Only count it as a rejection if the inspector said "reject" <em>and</em> backed it with at least one serious problem. A grumpy "reject" over nitpicks gets downgraded to "approve with notes", and the notes go in the report.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pattern-cards">
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-actor-1)">🫥</div>
+            <h4 class="pattern-title">Empty assertions</h4>
+            <p class="pattern-desc">A "test" that checks nothing and always passes.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-actor-4)">📌</div>
+            <h4 class="pattern-title">Hard-coded answers</h4>
+            <p class="pattern-desc"><code>return 6</code> because the test happens to expect 6.</p>
+          </div>
+          <div class="pattern-card" style="border-top: 3px solid var(--color-actor-3)">
+            <div class="pattern-icon" style="background: var(--color-actor-3)">🎭</div>
+            <h4 class="pattern-title">Stubbed behavior</h4>
+            <p class="pattern-desc">The thing under test is replaced with a fake that pretends to work.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Making chatty AIs fill in forms</h2>
+        <p>Routers need hard facts like <code>is_suitable: true</code>, not a paragraph. So every judgment call asks for <span class="term" data-definition="Structured output means asking an AI to answer in a strict machine-readable format (usually JSON matching a schema) instead of free-form prose.">structured output</span> in <span class="term" data-definition="JSON is a simple text format for data: {&quot;name&quot;: &quot;value&quot;, &quot;list&quot;: [1, 2]}. Almost every program can read and write it.">JSON</span>. Local models are bad at this, so <code>structured.py</code> works down a ladder of methods:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE · structured.py</span>
+            <pre><code><span class="code-line">_METHODS = (<span class="code-string">"json_schema"</span>, <span class="code-string">"function_calling"</span>)</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-comment"># Going through an OpenAI-compatible gateway (LiteLLM) to an Ollama backend, the</span></span>
+<span class="code-line"><span class="code-comment"># json_schema guarantee is gone: langchain-ollama's native `format` parameter is</span></span>
+<span class="code-line"><span class="code-comment"># no longer in play, so response_format is only advisory and the model can emit</span></span>
+<span class="code-line"><span class="code-comment"># prose the parser rejects. The gateway still logs 200 OK, which makes this</span></span>
+<span class="code-line"><span class="code-comment"># failure mode invisible in gateway logs. So put the portable method first for</span></span>
+<span class="code-line"><span class="code-comment"># OpenAI-family clients and keep json_mode as a third rung.</span></span>
+<span class="code-line">_METHODS_OPENAI = (<span class="code-string">"function_calling"</span>, <span class="code-string">"json_mode"</span>, <span class="code-string">"json_schema"</span>)</span></code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">For native Ollama: first try "json_schema", which <em>physically constrains</em> the model so it can only produce valid JSON. If that's unsupported, fall back to tool-calling style.</p>
+              <p class="tl">&nbsp;</p>
+              <p class="tl">But if you reach Ollama through a <span class="term" data-definition="A gateway (like LiteLLM) is a middleman service that sits between your app and one or more AI models, translating requests into a common format.">gateway</span>…</p>
+              <p class="tl">…that "physical constraint" no longer applies…</p>
+              <p class="tl">…so the model can slip back into prose…</p>
+              <p class="tl">…and the gateway still reports "200 OK" (success), which hides the problem.</p>
+              <p class="tl">So for OpenAI-style clients, lead with the method that works most broadly…</p>
+              <p class="tl">…and keep a third option as backup.</p>
+              <p class="tl">The resulting order for OpenAI-style services.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-step-num">1</div><p>Try each method; on a parse error, retry <em>with the error pasted back in</em></p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">2</div><p>Last resort: ask for raw JSON and dig it out of the text</p></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><div class="flow-step-num">3</div><p>Still broken? Raise <code>StructuredOutputError</code> and the node <em>escalates</em> instead of crashing</p></div>
+        </div>
+
+      </section>
+
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check your understanding</h2>
+        <div class="quiz-container" id="quiz-module4">
+          <div class="quiz-question-block"
+               data-correct="b"
+               data-explanation-right="The review and judge calls go through the 'secondary' role, so pointing CODING_AGENT_SECONDARY_MODEL at a stronger model sharpens exactly those calls without touching the maker."
+               data-explanation-wrong="Think roles, not nodes. Every call asks get_llm for a role, and the review lives in the 'secondary' role, which you configure separately.">
+            <h3 class="quiz-question">Your reviewer keeps approving sloppy work. You can afford one strong cloud model. Where does it do the most good?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Replace the primary model so the maker writes better code</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Set it as the secondary model, so it powers the judge and the reviewer</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Edit nodes.py so review_node creates its own model</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="c"
+               data-explanation-right="If the reviewer could read the maker's reasoning, it would be persuaded by the same logic that produced the mistake. Keeping it blind keeps it independent."
+               data-explanation-wrong="Consider why an inspector shouldn't hear the builder's sales pitch. Seeing the maker's reasoning would make the reviewer more likely to agree with it, mistakes included.">
+            <h3 class="quiz-question">An AI suggests: "Give the reviewer the maker's full chat history so it has more context." Good idea?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes. More context always means better reviews</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>Yes, but only at temperature 0</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>No. It would contaminate the reviewer with the maker's (possibly wrong) reasoning</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="a"
+               data-explanation-right="Re-scoring keeps the work already done and lets the new evidence (lessons) change the ranking. Regenerating risks getting the same bad ideas back."
+               data-explanation-wrong="When a plan dies, the agent has learned something. Re-scoring the existing plans with that lesson uses it directly, and costs much less than starting the brainstorm over.">
+            <h3 class="quiz-question">Why does plan_tot re-score surviving plans after a failure instead of brainstorming fresh ones?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="a" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>It's cheaper, and the new lesson changes which existing plan looks best</span></button>
+              <button class="quiz-option" data-value="b" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>LangGraph doesn't allow calling the same node twice</span></button>
+              <button class="quiz-option" data-value="c" onclick="selectOption(this)"><div class="quiz-option-radio"></div><span>The primary model is turned off after the first plan</span></button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
