@@ -1,6 +1,6 @@
 # Coding Engineer (`coding_agent`)
 
-The **Coding Engineer** is an autonomous, goal-driven coding agent framework built on [LangGraph](https://github.com/langchain-ai/langgraph). It executes complex software engineering tasks through a multi-stage state machine that integrates explicit specification intake, automated Behavior-Driven Development (BDD) scenario authoring, Tree-of-Thought (ToT) planning, sandboxed tool-assisted coding, multi-layered quality gates, adversarial code review, and deterministic no-progress failure detection.
+The **Coding Engineer** is an autonomous, goal-driven coding agent framework built on [LangGraph](https://github.com/langchain-ai/langgraph). It executes complex software engineering tasks through a multi-stage state machine that integrates explicit specification intake, automated Behavior-Driven Development (BDD) scenario authoring, Tree-of-Thought (ToT) planning, sandboxed tool-assisted coding, multi-layered quality gates, adversarial code review, and deterministic no-progress failure detection. [Tutorial](https://htmlpreview.github.io/?https://github.com/ly2xxx/langgraph_ollama/blob/main/coding-engineer-course/index.html)
 
 ![1785337898562](image/README/1785337898562.png)
 
